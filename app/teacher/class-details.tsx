@@ -16,6 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../../lib/api';
 import CreateGame from '../../app/admin/create-game';
 import GameTypeSelection from '../../app/admin/game-type-selection';
+import { GameModal, type Game } from '../../app/admin/games';
 
 interface Class {
   _id: string;
@@ -35,6 +36,8 @@ interface Class {
   troChoi: Array<{
     _id: string;
     tieuDe: string;
+    loai?: string;
+    type?: string;
   }>;
 }
 
@@ -50,6 +53,11 @@ export default function TeacherClassDetails() {
   const [gameTypeModalVisible, setGameTypeModalVisible] = useState(false);
   const [createGameModalVisible, setCreateGameModalVisible] = useState(false);
   const [selectedGameType, setSelectedGameType] = useState<'coloring' | 'puzzle' | 'guessing' | null>(null);
+  const [lessonModalMode, setLessonModalMode] = useState<'create' | 'edit'>('create');
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [gameEditorVisible, setGameEditorVisible] = useState(false);
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [loadingGameDetail, setLoadingGameDetail] = useState(false);
 
   useEffect(() => {
     loadClassDetails();
@@ -97,6 +105,84 @@ export default function TeacherClassDetails() {
             loadClassDetails();
           } catch (error: any) {
             Alert.alert('Lỗi', error.message || 'Không thể xóa học sinh');
+          }
+        }
+      }
+    ]);
+  };
+
+  const openLessonModal = (mode: 'create' | 'edit', lessonId?: string) => {
+    setLessonModalMode(mode);
+    setEditingLessonId(lessonId || null);
+    setLessonModalVisible(true);
+  };
+
+  const handleDeleteLesson = (lessonId: string) => {
+    Alert.alert('Xác nhận', 'Bạn có chắc muốn xóa bài học này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.lessons.delete(lessonId);
+            Alert.alert('Thành công', 'Đã xóa bài học');
+            loadClassDetails();
+          } catch (error: any) {
+            Alert.alert('Lỗi', error.message || 'Không thể xóa bài học');
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleEditGame = async (gameId: string) => {
+    try {
+      setLoadingGameDetail(true);
+      const response = await api.games.get(gameId);
+      const gameData = response.data?.game || response.data;
+      if (!gameData) {
+        throw new Error('Không tìm thấy dữ liệu trò chơi');
+      }
+      
+      // Normalize dữ liệu game để đảm bảo format đúng
+      const normalized: Game = {
+        id: (gameData as any).id || (gameData as any)._id || gameId,
+        key: (gameData as any).key || (gameData as any)._id || gameId,
+        title: gameData.tieuDe || gameData.title || '',
+        type: (gameData.loai || gameData.type || 'coloring') as any,
+        category: (gameData.danhMuc || gameData.category || 'letter') as any,
+        level: (gameData.capDo || gameData.level || 'beginner') as any,
+        description: gameData.moTa || gameData.description || '',
+        imageUrl: gameData.anhDaiDien || gameData.imageUrl || 
+                  (gameData.data?.coloringData?.outlineImage) || 
+                  (gameData.data?.imageUrl) || undefined,
+        estimatedTime: gameData.thoiGianUocTinh || gameData.estimatedTime || 5,
+        data: gameData.noiDung || gameData.data || {},
+      };
+      
+      setEditingGame(normalized);
+      setGameEditorVisible(true);
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể tải trò chơi');
+    } finally {
+      setLoadingGameDetail(false);
+    }
+  };
+
+  const handleDeleteGame = (gameId: string) => {
+    Alert.alert('Xác nhận', 'Bạn có chắc muốn xóa trò chơi này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.games.delete(gameId);
+            Alert.alert('Thành công', 'Đã xóa trò chơi');
+            loadClassDetails();
+          } catch (error: any) {
+            Alert.alert('Lỗi', error.message || 'Không thể xóa trò chơi');
           }
         }
       }
@@ -233,7 +319,7 @@ export default function TeacherClassDetails() {
               </Text>
               <TouchableOpacity
                 style={styles.addButton}
-                onPress={() => setLessonModalVisible(true)}
+                onPress={() => openLessonModal('create')}
               >
                 <Ionicons name="add-circle" size={24} color="#4CAF50" />
               </TouchableOpacity>
@@ -251,6 +337,20 @@ export default function TeacherClassDetails() {
                     <View style={styles.studentDetails}>
                       <Text style={styles.studentName}>{lesson.tieuDe}</Text>
                     </View>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={styles.cardActionButton}
+                      onPress={() => openLessonModal('edit', lesson._id)}
+                    >
+                      <Ionicons name="create" size={20} color="#2196F3" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.cardActionButton}
+                      onPress={() => handleDeleteLesson(lesson._id)}
+                    >
+                      <Ionicons name="trash" size={20} color="#F44336" />
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))
@@ -274,6 +374,13 @@ export default function TeacherClassDetails() {
               </TouchableOpacity>
             </View>
 
+            {loadingGameDetail && (
+              <View style={styles.inlineLoading}>
+                <ActivityIndicator size="small" color="#4CAF50" />
+                <Text style={styles.inlineLoadingText}>Đang tải trò chơi...</Text>
+              </View>
+            )}
+
             {!classData.troChoi || classData.troChoi.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>Chưa có trò chơi nào</Text>
@@ -286,6 +393,20 @@ export default function TeacherClassDetails() {
                     <View style={styles.studentDetails}>
                       <Text style={styles.studentName}>{game.tieuDe}</Text>
                     </View>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={styles.cardActionButton}
+                      onPress={() => handleEditGame(game._id)}
+                    >
+                      <Ionicons name="create" size={20} color="#2196F3" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.cardActionButton}
+                      onPress={() => handleDeleteGame(game._id)}
+                    >
+                      <Ionicons name="trash" size={20} color="#F44336" />
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))
@@ -342,12 +463,15 @@ export default function TeacherClassDetails() {
       </Modal>
 
       {/* Modal tạo bài học */}
-      <LessonCreateModal
+      <LessonEditorModal
         visible={lessonModalVisible}
         classId={classId as string}
+        mode={lessonModalMode}
+        lessonId={editingLessonId || undefined}
         onClose={() => setLessonModalVisible(false)}
         onSuccess={() => {
           setLessonModalVisible(false);
+          setEditingLessonId(null);
           loadClassDetails();
         }}
       />
@@ -380,16 +504,32 @@ export default function TeacherClassDetails() {
           }}
         />
       )}
+
+      <GameModal
+        visible={gameEditorVisible}
+        game={editingGame}
+        onClose={() => {
+          setGameEditorVisible(false);
+          setEditingGame(null);
+        }}
+        onSave={() => {
+          setGameEditorVisible(false);
+          setEditingGame(null);
+          loadClassDetails();
+        }}
+      />
     </View>
   );
 }
 
 // Component tạo bài học - sử dụng form đầy đủ từ admin
-function LessonCreateModal({ visible, classId, onClose, onSuccess }: {
+function LessonEditorModal({ visible, classId, onClose, onSuccess, mode = 'create', lessonId }: {
   visible: boolean;
   classId: string;
   onClose: () => void;
   onSuccess: () => void;
+  mode?: 'create' | 'edit';
+  lessonId?: string;
 }) {
   const mapExerciseType = (type: string): 'multiple_choice' | 'fill_blank' | 'drag_drop' | 'matching' | 'coloring' => {
     const typeMap: Record<string, 'multiple_choice' | 'fill_blank' | 'drag_drop' | 'matching' | 'coloring'> = {
@@ -434,20 +574,71 @@ function LessonCreateModal({ visible, classId, onClose, onSuccess }: {
   const [exercises, setExercises] = useState<any[]>([]);
   const [currentExercise, setCurrentExercise] = useState<any | null>(null);
   const [exerciseModalVisible, setExerciseModalVisible] = useState(false);
+  const [initializing, setInitializing] = useState(false);
+  const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      category: 'chuCai',
+      level: 'coBan',
+      estimatedTime: 10
+    });
+    setExercises([]);
+    setCurrentExercise(null);
+    setCurrentLessonId(null);
+  };
 
   useEffect(() => {
     if (!visible) {
-      // Reset form when modal closes
-      setFormData({
-        title: '',
-        description: '',
-        category: 'chuCai',
-        level: 'coBan',
-        estimatedTime: 10
-      });
-      setExercises([]);
+      resetForm();
+      setInitializing(false);
+      return;
     }
-  }, [visible]);
+    if (mode === 'edit' && lessonId) {
+      setCurrentLessonId(lessonId);
+      loadLessonDetail(lessonId);
+    } else {
+      resetForm();
+    }
+  }, [visible, mode, lessonId]);
+
+  const loadLessonDetail = async (id: string) => {
+    try {
+      setInitializing(true);
+      const response = await api.lessons.get(id);
+      const lesson = response.data?.lesson || response.data;
+      if (!lesson) {
+        throw new Error('Không tìm thấy bài học');
+      }
+      const category = (lesson.danhMuc || lesson.category || 'chuCai') as any;
+      const level = (lesson.capDo || lesson.level || 'coBan') as any;
+      setFormData({
+        title: lesson.tieuDe || lesson.title || '',
+        description: lesson.moTa || lesson.description || '',
+        category: (['chuCai', 'so', 'mauSac', 'hanhDong'].includes(category) ? category : 'chuCai') as 'chuCai' | 'so' | 'mauSac' | 'hanhDong',
+        level: (['coBan', 'trungBinh', 'nangCao'].includes(level) ? level : 'coBan') as 'coBan' | 'trungBinh' | 'nangCao',
+        estimatedTime: lesson.thoiGianUocTinh || lesson.estimatedTime || 10
+      });
+      const lessonExercises = (lesson.noiDung?.baiTap || lesson.exercises || []).map((exercise: any, index: number) => ({
+        id: exercise._id || exercise.id || `exercise-${index}`,
+        type: mapExerciseType(exercise.loai || exercise.type),
+        question: exercise.cauHoi || exercise.question || '',
+        options: exercise.phuongAn || exercise.options || [],
+        correctAnswer: exercise.dapAnDung || exercise.correctAnswer || '',
+        imageUrl: exercise.anhDaiDien || exercise.imageUrl,
+        text: exercise.vanBan || exercise.text,
+        blanks: exercise.oTrong || exercise.blanks || []
+      }));
+      setExercises(lessonExercises);
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể tải bài học');
+      onClose();
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   const handleAddExercise = () => {
     setCurrentExercise(null);
@@ -502,8 +693,13 @@ function LessonCreateModal({ visible, classId, onClose, onSuccess }: {
         }
       };
 
-      await api.classes.createLesson(classId, lessonData);
-      Alert.alert('Thành công', 'Đã tạo bài học');
+      if (mode === 'edit' && (lessonId || currentLessonId)) {
+        await api.classes.updateLessonInClass(classId, lessonId || currentLessonId!, lessonData);
+        Alert.alert('Thành công', 'Đã cập nhật bài học');
+      } else {
+        await api.classes.createLesson(classId, lessonData);
+        Alert.alert('Thành công', 'Đã tạo bài học');
+      }
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -966,6 +1162,25 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3
   },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  cardActionButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#f5f5f5'
+  },
+  inlineLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12
+  },
+  inlineLoadingText: {
+    fontSize: 14,
+    color: '#666'
+  },
   studentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1293,6 +1508,17 @@ const lessonModalStyles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: '600',
+  },
+  loadingState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
 });
 

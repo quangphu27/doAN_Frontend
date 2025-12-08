@@ -269,7 +269,7 @@ export default function ParentHome() {
         <View style={styles.headerContent}>
           <View style={styles.greetingContainer}>
             <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.name}>{user?.name}!</Text>
+            <Text style={styles.name}>{user?.hoTen}!</Text>
             <Text style={styles.subtitle}>Quản lý học tập của con</Text>
           </View>
           <TouchableOpacity style={styles.avatarContainer}>
@@ -383,6 +383,31 @@ export default function ParentHome() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {selectedChild && recentActivities.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Hoạt động gần đây - {selectedChild.name}</Text>
+            <TouchableOpacity onPress={handleViewChildActivities}>
+              <Text style={styles.seeAllText}>Xem tất cả</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.activitiesScroll}>
+            {recentActivities.slice(0, 5).map((activity) => (
+              <View key={activity.id} style={styles.activityCard}>
+                <View style={[styles.activityIcon, { backgroundColor: activity.color + '20' }]}>
+                  <Ionicons name={activity.icon as any} size={24} color={activity.color} />
+                </View>
+                <Text style={styles.activityTitle} numberOfLines={2}>{activity.title}</Text>
+                {activity.score !== undefined && (
+                  <Text style={styles.activityScore}>Điểm: {activity.score}</Text>
+                )}
+                <Text style={styles.activityTime}>{activity.timeAgo}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Tổng quan</Text>
@@ -639,16 +664,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  activityCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -659,16 +674,6 @@ const styles = StyleSheet.create({
   activityContent: {
     flex: 1,
     marginLeft: 12,
-  },
-  activityTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
   },
   emptyActivityContainer: {
     alignItems: 'center',
@@ -689,11 +694,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 4,
-  },
-  activityScore: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '600',
   },
   overviewGrid: {
     flexDirection: 'row',
@@ -725,6 +725,48 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  seeAllText: {
+    fontSize: 14,
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  activitiesScroll: {
+    marginTop: 12,
+  },
+  activityCard: {
+    width: 140,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  activityScore: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  activityTime: {
+    fontSize: 11,
+    color: '#999',
+  },
 });
-
-

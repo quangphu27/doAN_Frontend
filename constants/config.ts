@@ -1,5 +1,5 @@
-export const API_URL = 'http://192.168.1.11:5000/api';
-export const API = 'http://192.168.1.11:5000';
+export const API_URL = 'http://192.168.1.23:5000/api';
+export const API = 'http://192.168.1.23:5000';
 
 export const APP_NAME = 'Hỗ trợ học tập trẻ em';
 

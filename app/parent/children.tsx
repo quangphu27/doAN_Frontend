@@ -34,6 +34,18 @@ interface Child {
   }>;
 }
 
+interface GameResult {
+  id: string;
+  game: {
+    id: string;
+    title: string;
+    type: string;
+  };
+  score: number;
+  timeSpent: number;
+  completedAt: string;
+}
+
 interface Invitation {
   id: string;
   email: string;
@@ -53,7 +65,10 @@ export default function ChildManagement() {
   const [modalVisible, setModalVisible] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [classModalVisible, setClassModalVisible] = useState(false);
+  const [gameResultsModalVisible, setGameResultsModalVisible] = useState(false);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
+  const [gameResults, setGameResults] = useState<GameResult[]>([]);
+  const [loadingGameResults, setLoadingGameResults] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -125,6 +140,44 @@ export default function ChildManagement() {
   const handleViewChildClasses = (child: Child) => {
     setSelectedChild(child);
     setClassModalVisible(true);
+  };
+
+  const handleViewGameResults = async (child: Child) => {
+    setSelectedChild(child);
+    setGameResultsModalVisible(true);
+    await loadGameResults(child.id);
+  };
+
+  const loadGameResults = async (childId: string) => {
+    try {
+      setLoadingGameResults(true);
+      const response = await api.games.getHistory(childId, { limit: 50 });
+      
+      let results: GameResult[] = [];
+      if (response.data?.data?.history || response.data?.history) {
+        const gameHistory = response.data?.data?.history || response.data?.history || [];
+        results = gameHistory.map((item: any) => ({
+          id: item.id || item._id,
+          game: {
+            id: item.game?.id || item.game?._id,
+            title: item.game?.title || item.game?.tieuDe || 'Trò chơi',
+            type: item.game?.type || 'unknown'
+          },
+          score: item.score || item.diemSo || 0,
+          timeSpent: item.timeSpent || item.thoiGian || 0,
+          completedAt: item.completedAt || item.createdAt || new Date().toISOString()
+        }));
+      }
+      
+      setGameResults(results.sort((a, b) => 
+        new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+      ));
+    } catch (error: any) {
+      console.error('Error loading game results:', error);
+      setGameResults([]);
+    } finally {
+      setLoadingGameResults(false);
+    }
   };
 
 
@@ -315,6 +368,12 @@ export default function ChildManagement() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
+                  onPress={() => handleViewGameResults(child)}
+                >
+                  <Ionicons name="game-controller" size={20} color="#FF6B6B" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => handleDeleteChild(child.id)}
                 >
                   <Ionicons name="trash" size={20} color="#F44336" />
@@ -406,7 +465,140 @@ export default function ChildManagement() {
         child={selectedChild}
         onClose={() => setClassModalVisible(false)}
       />
+
+      <GameResultsModal
+        visible={gameResultsModalVisible}
+        child={selectedChild}
+        gameResults={gameResults}
+        loading={loadingGameResults}
+        onClose={() => setGameResultsModalVisible(false)}
+        onRefresh={() => selectedChild && loadGameResults(selectedChild.id)}
+      />
     </View>
+  );
+}
+
+function GameResultsModal({ visible, child, gameResults, loading, onClose, onRefresh }: {
+  visible: boolean;
+  child: Child | null;
+  gameResults: GameResult[];
+  loading: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  if (!visible || !child) return null;
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'puzzle': return 'grid';
+      case 'coloring': return 'color-palette';
+      case 'matching': return 'link';
+      case 'guessing': return 'help-circle';
+      default: return 'game-controller';
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'puzzle': return '#FF6B6B';
+      case 'coloring': return '#FF9800';
+      case 'matching': return '#9C27B0';
+      case 'guessing': return '#2196F3';
+      default: return '#666';
+    }
+  };
+
+  const getTypeText = (type: string) => {
+    switch (type) {
+      case 'puzzle': return 'Xếp hình';
+      case 'coloring': return 'Tô màu';
+      case 'matching': return 'Nối hình';
+      case 'guessing': return 'Đoán hành động';
+      default: return 'Trò chơi';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Kết quả trò chơi - {child.name}</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView 
+          style={styles.modalContent}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={onRefresh} />
+          }
+        >
+          {loading && gameResults.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="large" color="#2196F3" />
+              <Text style={styles.emptyText}>Đang tải kết quả...</Text>
+            </View>
+          ) : gameResults.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="game-controller-outline" size={60} color="#ccc" />
+              <Text style={styles.emptyText}>Chưa có kết quả trò chơi</Text>
+              <Text style={styles.emptySubtext}>Trẻ chưa chơi trò chơi nào</Text>
+            </View>
+          ) : (
+            gameResults.map((result) => (
+              <View key={result.id} style={styles.gameResultCard}>
+                <View style={styles.gameResultHeader}>
+                  <View style={[styles.gameResultIconContainer, { backgroundColor: getTypeColor(result.game.type) + '20' }]}>
+                    <Ionicons 
+                      name={getTypeIcon(result.game.type) as any} 
+                      size={24} 
+                      color={getTypeColor(result.game.type)} 
+                    />
+                  </View>
+                  <View style={styles.gameResultInfo}>
+                    <Text style={styles.gameResultTitle}>{result.game.title}</Text>
+                    <Text style={styles.gameResultType}>{getTypeText(result.game.type)}</Text>
+                  </View>
+                  <View style={styles.gameResultScore}>
+                    <Text style={styles.gameResultScoreText}>{result.score}</Text>
+                    <Text style={styles.gameResultScoreLabel}>điểm</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.gameResultDetails}>
+                  <View style={styles.gameResultDetailItem}>
+                    <Ionicons name="time" size={16} color="#666" />
+                    <Text style={styles.gameResultDetailText}>{result.timeSpent}s</Text>
+                  </View>
+                  <View style={styles.gameResultDetailItem}>
+                    <Ionicons name="calendar" size={16} color="#666" />
+                    <Text style={styles.gameResultDetailText}>{formatDate(result.completedAt)}</Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+
+        <View style={styles.modalActions}>
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <Text style={styles.cancelButtonText}>Đóng</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -1148,5 +1340,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: '600',
+  },
+  gameResultCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  gameResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  gameResultIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  gameResultInfo: {
+    flex: 1,
+  },
+  gameResultTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  gameResultType: {
+    fontSize: 12,
+    color: '#666',
+  },
+  gameResultScore: {
+    alignItems: 'center',
+  },
+  gameResultScoreText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FF6B6B',
+  },
+  gameResultScoreLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  gameResultDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  gameResultDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gameResultDetailText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
   },
 });

@@ -73,19 +73,19 @@ export default function ResultsScreen() {
       }
       
       let gameResults: GameResult[] = [];
-      if (gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history) {
-        const gameHistory = gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || [];
+      if (gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || Array.isArray(gameHistoryResponse.data)) {
+        const gameHistory = gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || gameHistoryResponse.data || [];
         gameResults = gameHistory.map((item: any) => ({
           id: item.id || item._id,
           game: {
-            id: item.game?.id || item.game?._id,
-            title: item.game?.title || 'Unknown Game',
-            type: item.game?.type || 'unknown',
-            category: item.game?.category || 'unknown'
+            id: item.game?.id || item.game?._id || item.troChoi?._id || item.troChoi?.id,
+            title: item.game?.title || item.game?.tieuDe || item.troChoi?.tieuDe || 'Trò chơi',
+            type: item.game?.type || item.gameType || item.loai || 'unknown',
+            category: item.game?.category || item.game?.danhMuc || 'unknown'
           },
-          score: item.score || 0,
-          timeSpent: item.timeSpent || 0,
-          completedAt: item.completedAt || item.createdAt || new Date().toISOString()
+          score: item.score || item.diemSo || 0,
+          timeSpent: item.timeSpent || item.thoiGian || 0,
+          completedAt: item.completedAt || item.createdAt || item.ngayHoanThanh || new Date().toISOString()
         }));
       }
         const allResults = [...lessonResults, ...gameResults].sort((a, b) => 

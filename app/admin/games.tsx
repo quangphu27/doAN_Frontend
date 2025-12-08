@@ -25,7 +25,7 @@ import { getFullImageUrl } from '../../utils/imageUtils';
 
 const { width } = Dimensions.get('window');
 
-interface Game {
+export interface Game {
   id: string;
   key: string;
   title: string;
@@ -313,7 +313,7 @@ export default function GameManagement() {
   );
 }
 
-function GameModal({ visible, game, onClose, onSave }: {
+export function GameModal({ visible, game, onClose, onSave }: {
   visible: boolean;
   game: Game | null;
   onClose: () => void;
@@ -330,6 +330,10 @@ function GameModal({ visible, game, onClose, onSave }: {
   const [newImageUri, setNewImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   
+  // State cho puzzle rows/cols
+  const [puzzleRows, setPuzzleRows] = useState<number>(3);
+  const [puzzleCols, setPuzzleCols] = useState<number>(3);
+  
   const [guessingQuestions, setGuessingQuestions] = useState<Array<{
     id?: string;
     options: string[];
@@ -343,39 +347,68 @@ function GameModal({ visible, game, onClose, onSave }: {
   useEffect(() => {
     if (game) {
       setFormData({
-        title: game.title,
-        level: game.level,
+        title: game.title || '',
+        level: game.level || 'beginner',
         description: game.description || '',
         estimatedTime: game.estimatedTime || 5,
       });
       
       let imageToShow: string | null = null;
       
+      // Xử lý cho game Puzzle - lấy originalImage từ data
       if (game.type === 'puzzle' && game.data?.originalImage) {
         imageToShow = getFullImageUrl(game.data.originalImage) || null;
-      } else if (game.type === 'guess_action' || game.type === 'guessing') {
+        // Load rows/cols từ data
+        setPuzzleRows(game.data.rows || 3);
+        setPuzzleCols(game.data.cols || 3);
+      } else if (game.type === 'puzzle') {
+        // Reset về mặc định nếu không có data
+        setPuzzleRows(3);
+        setPuzzleCols(3);
+      } 
+      // Xử lý cho game Coloring - lấy imageUrl hoặc outlineImage từ coloringData
+      else if (game.type === 'coloring') {
         if (game.imageUrl) {
-          const imageUrl = game.imageUrl.toLowerCase();
-          if (imageUrl.endsWith('.jpg') || imageUrl.endsWith('.jpeg') || imageUrl.endsWith('.png')) {
-            imageToShow = getFullImageUrl(game.imageUrl) || null;
-          }
+          imageToShow = getFullImageUrl(game.imageUrl) || null;
+        } else if (game.data?.coloringData?.outlineImage) {
+          imageToShow = getFullImageUrl(game.data.coloringData.outlineImage) || null;
         }
-        if (game.data?.questions && game.data.questions.length > 0) {
+      }
+      // Xử lý cho game Guessing - lấy thumbnail và questions
+      else if (game.type === 'guess_action' || game.type === 'guessing') {
+        // Lấy thumbnail (có thể là ảnh hoặc video/GIF)
+        if (game.imageUrl) {
+          imageToShow = getFullImageUrl(game.imageUrl) || null;
+        }
+        
+        // Load questions
+        if (game.data?.questions && Array.isArray(game.data.questions) && game.data.questions.length > 0) {
           const loadedQuestions = game.data.questions.map((q: any) => ({
-            id: q.id,
-            options: q.options || ['', '', '', ''],
-            correctAnswer: q.correctAnswer || '',
-            explanation: q.explanation || '',
-            mediaUrl: q.mediaUrl,
-            mediaType: q.mediaType
+            id: q.id || `question_${Date.now()}_${Math.random()}`,
+            options: Array.isArray(q.options) && q.options.length >= 4 
+              ? q.options 
+              : (q.options && q.options.length < 4 
+                  ? [...q.options, ...Array(4 - q.options.length).fill('')]
+                  : ['', '', '', '']),
+            correctAnswer: q.correctAnswer || q.dapAnDung || '',
+            explanation: q.explanation || q.giaiThich || '',
+            mediaUrl: q.mediaUrl || q.anhUrl || q.videoUrl,
+            mediaType: q.mediaType || q.loaiMedia || 'image'
           }));
           setGuessingQuestions(loadedQuestions);
           setSelectedMediaUris(new Array(loadedQuestions.length).fill(null));
         } else {
-          setGuessingQuestions([]);
-          setSelectedMediaUris([]);
+          // Nếu không có questions, tạo một câu hỏi mặc định
+          setGuessingQuestions([{
+            options: ['', '', '', ''],
+            correctAnswer: '',
+            explanation: ''
+          }]);
+          setSelectedMediaUris([null]);
         }
-      } else if (game.imageUrl) {
+      } 
+      // Xử lý cho các game khác - lấy imageUrl
+      else if (game.imageUrl) {
         imageToShow = getFullImageUrl(game.imageUrl) || null;
       }
       
@@ -396,6 +429,8 @@ function GameModal({ visible, game, onClose, onSave }: {
       setNewImageUri(null);
       setGuessingQuestions([]);
       setSelectedMediaUris([]);
+      setPuzzleRows(3);
+      setPuzzleCols(3);
     }
   }, [game]);
 
@@ -564,8 +599,8 @@ function GameModal({ visible, game, onClose, onSave }: {
       } as any;
       
       formData.append('image', fileData);
-      formData.append('rows', '3');
-      formData.append('cols', '3');
+      formData.append('rows', puzzleRows.toString());
+      formData.append('cols', puzzleCols.toString());
       
       let response;
       try {
@@ -770,17 +805,69 @@ function GameModal({ visible, game, onClose, onSave }: {
 
       let gameData: any = { ...formData };
       
-      if (newImageUri) {
-        if (game.type === 'puzzle') {
+      // Xử lý Puzzle
+      if (game.type === 'puzzle') {
+        if (newImageUri) {
+          // Có ảnh mới, upload với rows/cols mới
           const uploadResult = await uploadImage(newImageUri);
-        gameData.data = {
+          gameData.data = {
             ...(game.data || {}),
-          originalImage: uploadResult.originalImage,
-          pieces: uploadResult.pieces,
-          rows: 3,
-          cols: 3
-        };
-        } else if (game.type === 'coloring') {
+            originalImage: uploadResult.originalImage,
+            pieces: uploadResult.pieces,
+            rows: puzzleRows,
+            cols: puzzleCols
+          };
+        } else {
+          // Không có ảnh mới
+          const rowsChanged = game.data?.rows !== puzzleRows;
+          const colsChanged = game.data?.cols !== puzzleCols;
+          
+          if (rowsChanged || colsChanged) {
+            // Nếu thay đổi rows/cols, cần upload lại ảnh cũ
+            const originalImageUrl = game.data?.originalImage;
+            if (originalImageUrl) {
+              const fullImageUrl = getFullImageUrl(originalImageUrl);
+              if (fullImageUrl && (fullImageUrl.startsWith('http://') || fullImageUrl.startsWith('https://'))) {
+                // Nếu là URL từ server, cần download về trước (phức tạp)
+                // Tạm thời chỉ cập nhật rows/cols, backend sẽ xử lý
+                Alert.alert(
+                  'Lưu ý', 
+                  'Đã thay đổi số mảnh ghép. Vui lòng upload lại ảnh để áp dụng thay đổi, hoặc backend sẽ tự động cắt lại ảnh.'
+                );
+              }
+              // Upload lại ảnh cũ với rows/cols mới
+              try {
+                const uploadResult = await uploadImage(fullImageUrl || originalImageUrl);
+                gameData.data = {
+                  ...(game.data || {}),
+                  originalImage: uploadResult.originalImage,
+                  pieces: uploadResult.pieces,
+                  rows: puzzleRows,
+                  cols: puzzleCols
+                };
+              } catch (error) {
+                // Nếu không upload được (ví dụ URL không hợp lệ), chỉ cập nhật rows/cols
+                gameData.data = {
+                  ...(game.data || {}),
+                  rows: puzzleRows,
+                  cols: puzzleCols
+                };
+              }
+            } else {
+              // Không có ảnh, chỉ cập nhật rows/cols
+              gameData.data = {
+                ...(game.data || {}),
+                rows: puzzleRows,
+                cols: puzzleCols
+              };
+            }
+          } else {
+            // Không thay đổi gì, giữ nguyên
+            gameData.data = game.data || {};
+          }
+        }
+      } else if (newImageUri) {
+        if (game.type === 'coloring') {
           const uploadResult = await uploadMedia(newImageUri, 'coloring');
           const filename = uploadResult.imageUrl || uploadResult.filename;
           gameData.imageUrl = filename;
@@ -813,8 +900,14 @@ function GameModal({ visible, game, onClose, onSave }: {
           };
         }
       } else {
+        // Với các game khác (không phải puzzle), giữ nguyên data
         if (game.data) {
-          gameData.data = game.data;
+          // Puzzle đã được xử lý ở trên, chỉ xử lý các game khác
+          if (game.type === 'coloring' || game.type === 'guess_action' || game.type === 'guessing' || 
+              game.type === 'matching' || game.type === 'memory' || game.type === 'quiz' ||
+              game.type === 'guess_image' || game.type === 'guess_number') {
+            gameData.data = game.data;
+          }
         }
       }
 
@@ -1007,17 +1100,94 @@ function GameModal({ visible, game, onClose, onSave }: {
             
             {originalImageUri && (
               <View style={styles.originalMediaContainer}>
-                <Image 
-                  source={{ uri: originalImageUri }} 
-                  style={styles.previewImage}
-                  resizeMode="contain"
-                  onError={() => {
-                  }}
-                />
+                {game && (game.type === 'guess_action' || game.type === 'guessing') && 
+                 (originalImageUri.toLowerCase().endsWith('.mp4') || 
+                  originalImageUri.toLowerCase().endsWith('.mov')) ? (
+                  <Video
+                    source={{ uri: originalImageUri }}
+                    style={styles.previewImage}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={false}
+                    isLooping={false}
+                  />
+                ) : (
+                  <Image 
+                    source={{ uri: originalImageUri }} 
+                    style={styles.previewImage}
+                    resizeMode="contain"
+                    onError={() => {
+                    }}
+                  />
+                )}
                 <Text style={styles.originalMediaLabel}>
                   {game && (game.type === 'guess_action' || game.type === 'guessing') 
                     ? 'Thumbnail hiện tại' 
-                    : 'Ảnh hiện tại'}
+                    : game && game.type === 'puzzle'
+                      ? `Ảnh hiện tại (${puzzleRows}x${puzzleCols} mảnh)`
+                      : game && game.type === 'coloring'
+                      ? 'Ảnh outline hiện tại'
+                      : 'Ảnh hiện tại'}
+                </Text>
+              </View>
+            )}
+            
+            {/* UI chọn số mảnh ghép cho Puzzle */}
+            {game && game.type === 'puzzle' && (
+              <View style={styles.puzzleConfigContainer}>
+                <Text style={styles.inputLabel}>Số mảnh ghép</Text>
+                <View style={styles.puzzleConfigRow}>
+                  <View style={styles.puzzleConfigItem}>
+                    <Text style={styles.puzzleConfigLabel}>Hàng (Rows)</Text>
+                    <View style={styles.puzzleConfigButtons}>
+                      {[2, 3, 4, 5].map((num) => (
+                        <TouchableOpacity
+                          key={`row-${num}`}
+                          style={[
+                            styles.puzzleConfigButton,
+                            puzzleRows === num && styles.puzzleConfigButtonActive
+                          ]}
+                          onPress={() => setPuzzleRows(num)}
+                        >
+                          <Text style={[
+                            styles.puzzleConfigButtonText,
+                            puzzleRows === num && styles.puzzleConfigButtonTextActive
+                          ]}>
+                            {num}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.puzzleConfigItem}>
+                    <Text style={styles.puzzleConfigLabel}>Cột (Cols)</Text>
+                    <View style={styles.puzzleConfigButtons}>
+                      {[2, 3, 4, 5].map((num) => (
+                        <TouchableOpacity
+                          key={`col-${num}`}
+                          style={[
+                            styles.puzzleConfigButton,
+                            puzzleCols === num && styles.puzzleConfigButtonActive
+                          ]}
+                          onPress={() => setPuzzleCols(num)}
+                        >
+                          <Text style={[
+                            styles.puzzleConfigButtonText,
+                            puzzleCols === num && styles.puzzleConfigButtonTextActive
+                          ]}>
+                            {num}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+                <Text style={styles.puzzleConfigHint}>
+                  Tổng số mảnh: {puzzleRows * puzzleCols} mảnh
+                  {((game.data?.rows !== puzzleRows) || (game.data?.cols !== puzzleCols)) && 
+                   !newImageUri && 
+                   ' (Sẽ cắt lại ảnh hiện tại với số mảnh mới khi lưu)'}
+                  {newImageUri && ' (Sẽ áp dụng khi upload ảnh mới)'}
                 </Text>
               </View>
             )}
@@ -1028,17 +1198,33 @@ function GameModal({ visible, game, onClose, onSave }: {
                 {guessingQuestions.map((question, qIndex) => {
                   const mediaUri = selectedMediaUris[qIndex] || (question.mediaUrl ? getFullImageUrl(question.mediaUrl) : null);
                   const hasNewMedia = !!selectedMediaUris[qIndex];
+                  
+                  // Xác định mediaType
                   let mediaType = question.mediaType || 'image';
-                  if (hasNewMedia && mediaUri) {
-                    const uri = mediaUri.toLowerCase();
-                    if (uri.endsWith('.mp4') || uri.endsWith('.mov')) {
-                      mediaType = 'video';
-                    } else if (uri.endsWith('.gif')) {
-                      mediaType = 'gif';
-                    } else {
-                      mediaType = 'image';
+                  if (mediaUri) {
+                    if (hasNewMedia) {
+                      // Nếu có media mới, xác định từ URI
+                      const uri = mediaUri.toLowerCase();
+                      if (uri.endsWith('.mp4') || uri.endsWith('.mov')) {
+                        mediaType = 'video';
+                      } else if (uri.endsWith('.gif')) {
+                        mediaType = 'gif';
+                      } else {
+                        mediaType = 'image';
+                      }
+                    } else if (question.mediaUrl) {
+                      // Nếu không có media mới, xác định từ URL cũ
+                      const url = question.mediaUrl.toLowerCase();
+                      if (url.endsWith('.mp4') || url.endsWith('.mov')) {
+                        mediaType = 'video';
+                      } else if (url.endsWith('.gif')) {
+                        mediaType = 'gif';
+                      } else if (!question.mediaType || question.mediaType === 'image') {
+                        mediaType = 'image';
+                      }
                     }
                   }
+                  
                   const isVideo = mediaType === 'video';
                   const isGif = mediaType === 'gif';
                   
@@ -1072,7 +1258,16 @@ function GameModal({ visible, game, onClose, onSave }: {
                             </View>
                           ) : (
                             <View style={styles.imageContainer}>
-                              <Image source={{ uri: mediaUri }} style={styles.selectedImage} />
+                              <Image 
+                                source={{ uri: mediaUri }} 
+                                style={styles.selectedImage}
+                                resizeMode="contain"
+                              />
+                              {isGif && (
+                                <View style={styles.gifBadge}>
+                                  <Text style={styles.gifBadgeText}>GIF</Text>
+                                </View>
+                              )}
                             </View>
                           )}
                           <TouchableOpacity
@@ -1871,5 +2066,76 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  puzzleConfigContainer: {
+    marginTop: 15,
+    marginBottom: 15,
+    padding: 15,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  puzzleConfigRow: {
+    flexDirection: 'row',
+    gap: 20,
+    marginTop: 10,
+  },
+  puzzleConfigItem: {
+    flex: 1,
+  },
+  puzzleConfigLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  puzzleConfigButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  puzzleConfigButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  puzzleConfigButtonActive: {
+    backgroundColor: '#FF6B6B',
+    borderColor: '#FF6B6B',
+  },
+  puzzleConfigButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  puzzleConfigButtonTextActive: {
+    color: '#fff',
+  },
+  puzzleConfigHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 10,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  gifBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  gifBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

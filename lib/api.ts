@@ -163,6 +163,7 @@ export const api = {
 		getProgress: (id: string) => request(`/classes/${id}/progress`),
 		getStudentProgress: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}/progress`),
 		createLesson: (classId: string, payload: any) => request(`/classes/${classId}/lessons`, { method: 'POST', body: JSON.stringify(payload) }),
+		updateLessonInClass: (classId: string, lessonId: string, payload: any) => request(`/classes/${classId}/lessons/${lessonId}`, { method: 'PUT', body: JSON.stringify(payload) }),
 		createGame: (classId: string, payload: any) => request(`/classes/${classId}/games`, { method: 'POST', body: JSON.stringify(payload) })
 	}
 };

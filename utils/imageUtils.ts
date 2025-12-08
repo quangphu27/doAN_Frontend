@@ -1,6 +1,6 @@
 import { API } from '../constants/config';
 
-const API_URL = API || '192.168.1.11:5000';
+const API_URL = API || '192.168.1.23:5000';
 export const getFullImageUrl = (imageUrl?: string): string | undefined => {
   if (!imageUrl) return undefined;
   

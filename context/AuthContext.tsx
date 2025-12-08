@@ -2,13 +2,6 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAccessToken } from '../lib/api';
 
-interface TrialStatus {
-	isTrial: boolean;
-	isValid: boolean;
-	daysRemaining: number | null;
-	message: string;
-}
-
 interface UserInfo { 
 	id: string; 
 	hoTen: string; 
@@ -26,10 +19,7 @@ interface UserInfo {
 		ngonNgu: string;
 		muiGio: string;
 	};
-	trialStatus?: TrialStatus;
 	trangThai?: boolean;
-	taiKhoanDungThu?: boolean;
-	daKichHoat?: boolean;
 }
 interface AuthState { user: UserInfo | null; token: string | null; refreshToken: string | null; loading: boolean; }
 interface AuthContextType extends AuthState {

@@ -51,10 +51,14 @@ export default function LessonHistory() {
     
     try {
       setLoading(true);
-      const response = await api.lessons.getHistory(user.id);
+      const response = await api.lessons.getHistory(user.id, { limit: 100 });
       
       const historyData = response.data?.data?.history || response.data?.history || [];
-      setHistory(historyData);
+      const sortedHistory = historyData.sort((a: any, b: any) => {
+        return new Date(b.completedAt || b.ngayHoanThanh || b.createdAt || 0).getTime() -
+          new Date(a.completedAt || a.ngayHoanThanh || a.createdAt || 0).getTime();
+      });
+      setHistory(sortedHistory);
     } catch (error) {
       console.error('Error loading lesson history:', error);
       Alert.alert('Lỗi', 'Không thể tải lịch sử bài học');
@@ -141,12 +145,15 @@ export default function LessonHistory() {
     }
     
     router.push({
-      pathname: '/child/lesson-details',
+      pathname: '/child/result-detail',
       params: {
-        lessonId: lessonId,
-        historyId: item.id
+        type: 'lesson',
+        itemId: lessonId,
+        studentId: user?.id || '',
+        title: item.lesson.title || '',
+        studentName: user?.hoTen || ''
       }
-    });
+    } as any);
   };
 
   if (loading) {
@@ -202,13 +209,13 @@ export default function LessonHistory() {
                   onPress={() => handleViewDetails(item)}
                 >
                 <View style={styles.cardHeader}>
-                  <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.lesson.category) }]}>
-                    <Ionicons name={getCategoryIcon(item.lesson.category) as any} size={20} color="#fff" />
+                  <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.lesson.category || (item.lesson as any).danhMuc) }]}>
+                    <Ionicons name={getCategoryIcon(item.lesson.category || (item.lesson as any).danhMuc) as any} size={20} color="#fff" />
                   </View>
                   <View style={styles.lessonInfo}>
-                    <Text style={styles.lessonTitle}>{item.lesson.title}</Text>
-                    <Text style={styles.lessonCategory}>{getCategoryName(item.lesson.category)}</Text>
-                    <Text style={styles.lessonLevel}>{getLevelText(item.lesson.level)}</Text>
+                    <Text style={styles.lessonTitle}>{item.lesson.title || (item.lesson as any).tieuDe}</Text>
+                    <Text style={styles.lessonCategory}>{getCategoryName(item.lesson.category || (item.lesson as any).danhMuc)}</Text>
+                    <Text style={styles.lessonLevel}>{getLevelText(item.lesson.level || (item.lesson as any).capDo)}</Text>
                   </View>
                   <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(item.score) }]}>
                     <Text style={styles.scoreText}>{item.score}%</Text>

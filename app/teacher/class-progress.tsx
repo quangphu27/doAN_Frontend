@@ -13,6 +13,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../../lib/api';
 
+interface LessonStat {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  level?: string;
+  image?: string;
+  summary: {
+    totalStudents: number;
+    submittedCount: number;
+    notSubmittedCount: number;
+    averageScore: number;
+  };
+}
+
+interface GameStat {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  type?: string;
+  image?: string;
+  summary: {
+    totalStudents: number;
+    submittedCount: number;
+    notSubmittedCount: number;
+    averageScore: number;
+  };
+}
+
 interface StudentProgress {
   student: {
     id: string;
@@ -54,8 +84,12 @@ export default function ClassProgress() {
   const router = useRouter();
   const { classId } = useLocalSearchParams();
   const [data, setData] = useState<ClassProgress | null>(null);
+  const [assignmentStats, setAssignmentStats] = useState<{ lessons: LessonStat[]; games: GameStat[] }>({
+    lessons: [],
+    games: []
+  });
   const [loading, setLoading] = useState(true);
-  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'assignments' | 'students'>('assignments');
 
   useEffect(() => {
     loadProgress();
@@ -64,13 +98,34 @@ export default function ClassProgress() {
   const loadProgress = async () => {
     try {
       setLoading(true);
-      const response = await api.classes.getProgress(classId as string);
-      setData(response.data);
+      const [progressRes, statsRes] = await Promise.all([
+        api.classes.getProgress(classId as string),
+        api.classes.getLessonsStats(classId as string)
+      ]);
+      setData(progressRes.data);
+      if (statsRes?.data) {
+        setAssignmentStats({
+          lessons: statsRes.data.lessons || [],
+          games: statsRes.data.games || []
+        });
+      }
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể tải kết quả');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewAssignment = (item: LessonStat | GameStat, type: 'lesson' | 'game') => {
+    router.push({
+      pathname: '/teacher/item-results',
+      params: {
+        classId: classId as string,
+        itemId: item.id,
+        type,
+        title: item.title
+      }
+    } as any);
   };
 
   const handleViewStudentProgress = (studentId: string) => {
@@ -127,8 +182,111 @@ export default function ClassProgress() {
         <View style={styles.placeholder} />
       </LinearGradient>
 
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tab, viewMode === 'assignments' && styles.tabActive]}
+          onPress={() => setViewMode('assignments')}
+        >
+          <Text style={[styles.tabText, viewMode === 'assignments' && styles.tabTextActive]}>Bài tập / Trò chơi</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, viewMode === 'students' && styles.tabActive]}
+          onPress={() => setViewMode('students')}
+        >
+          <Text style={[styles.tabText, viewMode === 'students' && styles.tabTextActive]}>Theo học sinh</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.content}>
-        {data.students.length === 0 ? (
+        {viewMode === 'assignments' ? (
+          <>
+            <Text style={styles.sectionTitle}>Bài tập ({assignmentStats.lessons.length})</Text>
+            {assignmentStats.lessons.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="book-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyText}>Chưa có bài tập</Text>
+              </View>
+            ) : (
+              assignmentStats.lessons.map((lesson) => (
+                <TouchableOpacity
+                  key={lesson.id}
+                  style={styles.itemCard}
+                  onPress={() => handleViewAssignment(lesson, 'lesson')}
+                >
+                  <View style={styles.itemHeader}>
+                    <View style={styles.itemInfo}>
+                      <Ionicons name="book" size={22} color="#4CAF50" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.itemTitle}>{lesson.title}</Text>
+                        <Text style={styles.itemSub}>{lesson.description || 'Bài tập'}</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={22} color="#666" />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{lesson.summary.submittedCount}</Text>
+                      <Text style={styles.statLabel}>Đã nộp</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{lesson.summary.notSubmittedCount}</Text>
+                      <Text style={styles.statLabel}>Chưa nộp</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statValue, { color: getScoreColor(lesson.summary.averageScore) }]}>
+                        {lesson.summary.averageScore}%
+                      </Text>
+                      <Text style={styles.statLabel}>Điểm TB</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+
+            <Text style={styles.sectionTitle}>Trò chơi ({assignmentStats.games.length})</Text>
+            {assignmentStats.games.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="game-controller-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyText}>Chưa có trò chơi</Text>
+              </View>
+            ) : (
+              assignmentStats.games.map((game) => (
+                <TouchableOpacity
+                  key={game.id}
+                  style={styles.itemCard}
+                  onPress={() => handleViewAssignment(game, 'game')}
+                >
+                  <View style={styles.itemHeader}>
+                    <View style={styles.itemInfo}>
+                      <Ionicons name="game-controller" size={22} color="#F44336" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.itemTitle}>{game.title}</Text>
+                        <Text style={styles.itemSub}>{game.description || 'Trò chơi'}</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={22} color="#666" />
+                  </View>
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{game.summary.submittedCount}</Text>
+                      <Text style={styles.statLabel}>Đã nộp</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{game.summary.notSubmittedCount}</Text>
+                      <Text style={styles.statLabel}>Chưa nộp</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statValue, { color: getScoreColor(game.summary.averageScore) }]}>
+                        {game.summary.averageScore}%
+                      </Text>
+                      <Text style={styles.statLabel}>Điểm TB</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </>
+        ) : data.students.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={64} color="#ccc" />
             <Text style={styles.emptyText}>Chưa có kết quả nào</Text>
@@ -311,6 +469,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666'
   },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8
+  },
+  itemCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12
+  },
+  itemInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1
+  },
+  itemTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 2
+  },
+  itemSub: {
+    fontSize: 13,
+    color: '#666'
+  },
   recentProgress: {
     gap: 8
   },
@@ -338,6 +538,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#4CAF50'
+  },
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e0e0e0'
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#fff'
+  },
+  tabActive: {
+    backgroundColor: '#e8f5e9'
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#555',
+    fontWeight: '500'
+  },
+  tabTextActive: {
+    color: '#2e7d32',
+    fontWeight: '700'
   },
   backButton: {
     backgroundColor: '#4CAF50',

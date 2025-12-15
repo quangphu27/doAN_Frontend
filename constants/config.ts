@@ -1,13 +1,12 @@
 export const API_URL = 'http://192.168.1.23:5000/api';
 export const API = 'http://192.168.1.23:5000';
-
 export const APP_NAME = 'Hỗ trợ học tập trẻ em';
 
 export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'access_token',
   REFRESH_TOKEN: 'refresh_token',
   USER_INFO: 'user_info'
-}; 
+};
 
 export const ENDPOINTS = {
   AUTH: {

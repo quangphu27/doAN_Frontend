@@ -34,7 +34,7 @@ export default function ResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [results, setResults] = useState<GameResult[]>([]);
-  const [selectedTab, setSelectedTab] = useState<'all' | 'lessons' | 'games'>('all');
+  const [selectedTab, setSelectedTab] = useState<'all' | 'games'>('all');
 
   useEffect(() => {
     loadResults();
@@ -47,48 +47,32 @@ export default function ResultsScreen() {
       setLoading(true);
       console.log('Loading results for user:', user.id);
       
-      const [lessonHistoryResponse, gameHistoryResponse] = await Promise.all([
-        api.lessons.getHistory(user.id),
-        api.games.getHistory(user.id)
-      ]);
+      const gameHistoryResponse = await api.games.getHistory(user.id, { limit: 100 });
       
-      console.log('Lesson history response:', lessonHistoryResponse);
       console.log('Game history response:', gameHistoryResponse);
-      
-      let lessonResults: GameResult[] = [];
-      if (lessonHistoryResponse.data?.data?.history || lessonHistoryResponse.data?.history) {
-        const lessonHistory = lessonHistoryResponse.data?.data?.history || lessonHistoryResponse.data?.history || [];
-        lessonResults = lessonHistory.map((item: any) => ({
-          id: item.id || item._id,
-          game: {
-            id: item.lesson?.id || item.lesson?._id,
-            title: item.lesson?.title || 'Unknown Lesson',
-            type: 'lesson',
-            category: item.lesson?.category || 'unknown'
-          },
-          score: item.score || 0,
-          timeSpent: item.timeSpent || 0,
-          completedAt: item.completedAt || item.createdAt || new Date().toISOString()
-        }));
-      }
-      
+            
       let gameResults: GameResult[] = [];
       if (gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || Array.isArray(gameHistoryResponse.data)) {
         const gameHistory = gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || gameHistoryResponse.data || [];
-        gameResults = gameHistory.map((item: any) => ({
-          id: item.id || item._id,
-          game: {
-            id: item.game?.id || item.game?._id || item.troChoi?._id || item.troChoi?.id,
-            title: item.game?.title || item.game?.tieuDe || item.troChoi?.tieuDe || 'Trò chơi',
-            type: item.game?.type || item.gameType || item.loai || 'unknown',
-            category: item.game?.category || item.game?.danhMuc || 'unknown'
-          },
-          score: item.score || item.diemSo || 0,
-          timeSpent: item.timeSpent || item.thoiGian || 0,
-          completedAt: item.completedAt || item.createdAt || item.ngayHoanThanh || new Date().toISOString()
-        }));
+        gameResults = gameHistory
+          .filter((item: any) => {
+            const type = item.game?.type || item.gameType || item.loai;
+            return type !== 'lesson';
+          })
+          .map((item: any) => ({
+            id: item.id || item._id,
+            game: {
+              id: item.game?.id || item.game?._id || item.troChoi?._id || item.troChoi?.id,
+              title: item.game?.title || item.game?.tieuDe || item.troChoi?.tieuDe || 'Trò chơi',
+              type: item.game?.type || item.gameType || item.loai || 'unknown',
+              category: item.game?.category || item.game?.danhMuc || 'unknown'
+            },
+            score: item.score || item.diemSo || 0,
+            timeSpent: item.timeSpent || item.thoiGian || 0,
+            completedAt: item.completedAt || item.createdAt || item.ngayHoanThanh || new Date().toISOString()
+          }));
       }
-        const allResults = [...lessonResults, ...gameResults].sort((a, b) => 
+        const allResults = [...gameResults].sort((a, b) => 
         new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
       );
       
@@ -108,14 +92,9 @@ export default function ResultsScreen() {
   };
 
   const getFilteredResults = () => {
-    switch (selectedTab) {
-      case 'lessons':
-        return results.filter(result => result.game.type === 'lesson');
-      case 'games':
-        return results.filter(result => result.game.type !== 'lesson');
-      default:
-        return results;
-    }
+    return selectedTab === 'games'
+      ? results.filter(result => result.game.type !== 'lesson')
+      : results;
   };
 
   const getTypeIcon = (type: string) => {
@@ -136,6 +115,32 @@ export default function ResultsScreen() {
       case 'matching': return '#9C27B0';
       default: return '#666';
     }
+  };
+
+  const getCategoryName = (category: string) => {
+    switch (category) {
+      case 'letter':
+      case 'chuCai':
+        return 'Chữ cái';
+      case 'number':
+      case 'so':
+        return 'Số';
+      case 'color':
+      case 'mauSac':
+        return 'Màu sắc';
+      case 'action':
+      case 'hanhDong':
+        return 'Hành động';
+      default:
+        return 'Khác';
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const totalSeconds = seconds || 0;
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}p${secs.toString().padStart(2, '0')}s`;
   };
 
   const formatDate = (dateString: string) => {
@@ -188,19 +193,11 @@ export default function ResultsScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, selectedTab === 'lessons' && styles.tabActive]}
-          onPress={() => setSelectedTab('lessons')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'lessons' && styles.tabTextActive]}>
-            Bài học ({results.filter(r => r.game.type === 'lesson').length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.tab, selectedTab === 'games' && styles.tabActive]}
           onPress={() => setSelectedTab('games')}
         >
           <Text style={[styles.tabText, selectedTab === 'games' && styles.tabTextActive]}>
-            Trò chơi ({results.filter(r => r.game.type !== 'lesson').length})
+            Trò chơi
           </Text>
         </TouchableOpacity>
       </View>
@@ -229,10 +226,10 @@ export default function ResultsScreen() {
                   />
                 </View>
                 <View style={styles.resultInfo}>
-                  <Text style={styles.resultTitle}>{result.game.title}</Text>
-                  <Text style={styles.resultType}>
-                    {result.game.type === 'lesson' ? 'Bài học' : 'Trò chơi'} • {result.game.category}
-                  </Text>
+                <Text style={styles.resultTitle}>{result.game.title}</Text>
+                <Text style={styles.resultType}>
+                  {getCategoryName(result.game.category)}
+                </Text>
                 </View>
                 <View style={styles.resultScore}>
                   <Text style={styles.scoreText}>{result.score}</Text>
@@ -243,7 +240,7 @@ export default function ResultsScreen() {
               <View style={styles.resultDetails}>
                 <View style={styles.detailItem}>
                   <Ionicons name="time" size={16} color="#666" />
-                  <Text style={styles.detailText}>{result.timeSpent}s</Text>
+                  <Text style={styles.detailText}>{formatDuration(result.timeSpent)}</Text>
                 </View>
                 <View style={styles.detailItem}>
                   <Ionicons name="calendar" size={16} color="#666" />

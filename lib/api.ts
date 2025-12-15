@@ -56,7 +56,8 @@ export const api = {
 		getRecommended: (childId: string) => request(`/lessons/child/${childId}/recommended`),
 		complete: (id: string, childId: string) => request(`/lessons/${id}/complete`, { method: 'POST', body: JSON.stringify({ childId }) }),
 		checkCompletion: (lessonId: string, childId: string) => request(`/lessons/${lessonId}/completion/${childId}`),
-		getHistory: (childId: string, params?: any) => request(`/lessons/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`)
+		getHistory: (childId: string, params?: any) => request(`/lessons/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+		getResults: (lessonId: string) => request(`/lessons/${lessonId}/results`)
 	},
 	progress: {
 		get: (id: string) => request(`/progress/${id}`),
@@ -141,8 +142,21 @@ export const api = {
 			if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 			return fetch(`${API_URL}/games/create/guessing`, { method: 'POST', body: formData, headers });
 		},
-		saveResult: (payload: any) => request('/games/result', { method: 'POST', body: JSON.stringify(payload) }),
-		getHistory: (childId: string, params?: any) => request(`/games/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`)
+		saveResult: (payload: any) => {
+			if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+				const headers: any = {};
+				if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+				return fetch(`${API_URL}/games/result`, { method: 'POST', body: payload, headers })
+					.then(async res => {
+						const json = await res.json().catch(() => ({}));
+						if (!res.ok) throw new Error(json?.message || `HTTP ${res.status}`);
+						return json;
+					});
+			}
+			return request('/games/result', { method: 'POST', body: JSON.stringify(payload) });
+		},
+		getHistory: (childId: string, params?: any) => request(`/games/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+		getResults: (gameId: string) => request(`/games/${gameId}/results`)
 	},
 	appSessions: {
 		start: (childId: string) => request('/app-sessions/start', { method: 'POST', body: JSON.stringify({ childId }) }),
@@ -162,6 +176,7 @@ export const api = {
 		removeStudent: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}`, { method: 'DELETE' }),
 		getProgress: (id: string) => request(`/classes/${id}/progress`),
 		getStudentProgress: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}/progress`),
+		getLessonsStats: (id: string) => request(`/classes/${id}/lessons/stats`),
 		createLesson: (classId: string, payload: any) => request(`/classes/${classId}/lessons`, { method: 'POST', body: JSON.stringify(payload) }),
 		updateLessonInClass: (classId: string, lessonId: string, payload: any) => request(`/classes/${classId}/lessons/${lessonId}`, { method: 'PUT', body: JSON.stringify(payload) }),
 		createGame: (classId: string, payload: any) => request(`/classes/${classId}/games`, { method: 'POST', body: JSON.stringify(payload) })

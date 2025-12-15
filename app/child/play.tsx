@@ -131,12 +131,12 @@ export default function PlayScreen() {
   const [lessonResultsVisible, setLessonResultsVisible] = useState(false);
   const [lessonScore, setLessonScore] = useState(0);
   const [lessonTimeSpent, setLessonTimeSpent] = useState(0);
+  const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
+  const [completedGameIds, setCompletedGameIds] = useState<Set<string>>(new Set());
 
-  // Helper function to get exercises from lesson (supports both Vietnamese and English fields)
   const getLessonExercises = (lesson: Lesson | null): Exercise[] => {
     if (!lesson) return [];
     const exercises = lesson.content?.exercises || (lesson as any).noiDung?.baiTap || [];
-    // Transform Vietnamese exercise format to English format if needed
     return exercises.map((ex: any) => ({
       id: ex._id || ex.id,
       type: ex.loai === 'tracNghiem' ? 'multiple_choice' :
@@ -173,8 +173,12 @@ export default function PlayScreen() {
         api.lessons.list(lessonsParams),
         api.games.list(gamesParams)
       ]);
+      console.log('[PlayScreen] lessonsResponse', lessonsResponse?.data?.lessons?.map((l: any) => ({ id: l._id || l.id, completed: l.completed })));
+      console.log('[PlayScreen] gamesResponse', gamesResponse?.data?.games?.map((g: any) => ({ id: g._id || g.id })));
       
       let gameResultsData: GameResult[] = [];
+      let lessonDoneArray: string[] = [];
+      let gameDoneArray: string[] = [];
       if (user?.id && user?.vaiTro === 'hocSinh') {
         try {
           const [lessonHistoryResponse, gameHistoryResponse] = await Promise.all([
@@ -199,6 +203,13 @@ export default function PlayScreen() {
               achievements: item.achievements || [],
               completedAt: item.completedAt || item.ngayHoanThanh || item.createdAt || new Date().toISOString()
             }));
+
+            // lưu tập bài học đã hoàn thành
+            lessonDoneArray = lessonHistory
+              .map((item: any) => item.lesson?.id || item.lesson?._id || item.lesson || item.baiHoc || item.lessonId)
+              .filter(Boolean)
+              .map((id: any) => id.toString());
+            setCompletedLessonIds(new Set<string>(lessonDoneArray));
           }
           
           let gameResults: GameResult[] = [];
@@ -218,11 +229,20 @@ export default function PlayScreen() {
               achievements: item.achievements || [],
               completedAt: item.completedAt || item.createdAt || new Date().toISOString()
             }));
+
+            gameDoneArray = gameHistory
+              .map((item: any) => item.game?.id || item.game?._id || item.troChoi || item.gameId)
+              .filter(Boolean)
+              .map((id: any) => id.toString());
+            setCompletedGameIds(new Set<string>(gameDoneArray));
           }
           
           gameResultsData = [...lessonResults, ...gameResults].sort((a, b) => 
             new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
           );
+
+          console.log('[PlayScreen] lessonHistory ids', lessonDoneArray);
+          console.log('[PlayScreen] gameHistory ids', gameDoneArray);
         } catch (error) {
           gameResultsData = [];
         }
@@ -297,8 +317,24 @@ export default function PlayScreen() {
           id: lesson._id || lesson.id
         }));
       }
-      
-      setLessons(lessonsWithCompletion);
+
+      // Ẩn bài học đã hoàn thành (theo cờ completed hoặc history)
+      const filteredLessons = user?.vaiTro === 'hocSinh'
+        ? lessonsWithCompletion.filter(lesson => {
+            const rawId = (lesson as any).id || (lesson as any)._id || '';
+            const id = rawId ? rawId.toString() : '';
+            const alreadyDone = (lesson as any).completed === true || (id && (completedLessonIds.has(id) || lessonDoneArray.includes(id)));
+            return id && !alreadyDone;
+          })
+        : lessonsWithCompletion;
+
+      console.log('[PlayScreen] filteredLessons ids', filteredLessons.map((l: any) => ({
+        id: l.id || l._id,
+        completedFlag: l.completed,
+        completedIdSet: (l.id && completedLessonIds.has((l.id as any).toString())),
+        inHistory: lessonDoneArray.includes((l.id as any)?.toString())
+      })));
+      setLessons(filteredLessons);
 
       const rawGames = gamesResponse.data?.games || [];
       const transformedGames: Game[] = rawGames.map((game: any) => {
@@ -345,6 +381,18 @@ export default function PlayScreen() {
       });
 
       setGames(transformedGames);
+      // Ẩn game đã hoàn thành
+      if (user?.vaiTro === 'hocSinh') {
+        const filteredGames = transformedGames.filter(game => {
+          const rawId = (game as any).id || (game as any)._id || '';
+          const id = rawId ? rawId.toString() : '';
+          const alreadyDone = id && (completedGameIds.has(id) || gameDoneArray.includes(id));
+          return id && !alreadyDone;
+        });
+        setGames(filteredGames);
+      } else {
+        setGames(transformedGames);
+      }
       setGameResults(gameResultsData);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -852,10 +900,18 @@ export default function PlayScreen() {
         }
       >
         {selectedTab === 'lessons' && (
-          <LessonsList lessons={lessons} onStartLesson={handleStartLesson} />
+          <LessonsList
+            lessons={lessons}
+            completedIds={completedLessonIds}
+            onStartLesson={handleStartLesson}
+          />
         )}
         {selectedTab === 'games' && (
-          <GamesList games={games} onStartGame={handleStartGame} />
+          <GamesList
+            games={games}
+            completedIds={completedGameIds}
+            onStartGame={handleStartGame}
+          />
         )}
         {selectedTab === 'results' && (
           <ResultsList gameResults={gameResults} />
@@ -897,9 +953,10 @@ export default function PlayScreen() {
   );
 }
 
-function LessonsList({ lessons, onStartLesson }: {
+function LessonsList({ lessons, onStartLesson, completedIds }: {
   lessons: Lesson[];
   onStartLesson: (lesson: Lesson) => void;
+  completedIds: Set<string>;
 }) {
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -941,13 +998,18 @@ function LessonsList({ lessons, onStartLesson }: {
     );
   }
 
-  const incompleteLessons = lessons.filter(lesson => !lesson.completed);
+  const incompleteLessons = lessons.filter(lesson => {
+    const rawId = lesson.id || (lesson as any)._id || '';
+    const id = rawId ? rawId.toString() : '';
+    const alreadyDone = (lesson as any).completed === true || (id && completedIds.has(id));
+    return id && !alreadyDone;
+  });
   
   console.log('Lessons filtering:', {
     total: lessons.length,
     incomplete: incompleteLessons.length,
-    completed: lessons.filter(lesson => lesson.completed).length,
-    lessons: lessons.map(l => ({ id: l.id || (l as any)._id || '', title: l.title || (l as any).tieuDe || '', completed: l.completed }))
+    completed: lessons.length - incompleteLessons.length,
+    lessons: lessons.map(l => ({ id: l.id || (l as any)._id || '', title: l.title || (l as any).tieuDe || '', completed: completedIds.has(l.id || (l as any)._id || '') }))
   });
 
   return (
@@ -1001,9 +1063,10 @@ function LessonsList({ lessons, onStartLesson }: {
   );
 }
 
-function GamesList({ games, onStartGame }: {
+function GamesList({ games, onStartGame, completedIds }: {
   games: Game[];
   onStartGame: (game: Game) => void;
+  completedIds: Set<string>;
 }) {
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -1057,9 +1120,14 @@ function GamesList({ games, onStartGame }: {
     );
   }
 
+  const playableGames = games.filter(game => {
+    const id = game.id || (game as any)._id || '';
+    return id && !completedIds.has(id);
+  });
+
   return (
     <View style={styles.listContainer}>
-      {games.map((game) => (
+      {playableGames.map((game) => (
         <TouchableOpacity
           key={game.id || (game as any)._id || Math.random().toString()}
           style={styles.gameCard}

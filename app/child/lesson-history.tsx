@@ -145,12 +145,12 @@ export default function LessonHistory() {
     }
     
     router.push({
-      pathname: '/child/result-detail',
+      pathname: '/result-detail',
       params: {
         type: 'lesson',
         itemId: lessonId,
         studentId: user?.id || '',
-        title: item.lesson.title || '',
+        title: item.lesson.title || (item.lesson as any).tieuDe || '',
         studentName: user?.hoTen || ''
       }
     } as any);

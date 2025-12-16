@@ -225,9 +225,7 @@ export default function TeacherClassDetails() {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{classData.tenLop}</Text>
-        <TouchableOpacity onPress={() => setModalVisible(true)}>
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ width: 24 }} />
       </LinearGradient>
 
       <View style={styles.tabs}>
@@ -279,7 +277,8 @@ export default function TeacherClassDetails() {
                 style={styles.addButton}
                 onPress={() => setModalVisible(true)}
               >
-                <Ionicons name="add-circle" size={24} color="#4CAF50" />
+                <Ionicons name="add-circle" size={28} color="#4CAF50" />
+                <Text style={styles.addButtonText}>Thêm học sinh</Text>
               </TouchableOpacity>
             </View>
 
@@ -321,7 +320,8 @@ export default function TeacherClassDetails() {
                 style={styles.addButton}
                 onPress={() => openLessonModal('create')}
               >
-                <Ionicons name="add-circle" size={24} color="#4CAF50" />
+                <Ionicons name="add-circle" size={28} color="#4CAF50" />
+                <Text style={styles.addButtonText}>Thêm bài tập</Text>
               </TouchableOpacity>
             </View>
 
@@ -370,7 +370,8 @@ export default function TeacherClassDetails() {
                   setGameTypeModalVisible(true);
                 }}
               >
-                <Ionicons name="add-circle" size={24} color="#4CAF50" />
+                <Ionicons name="add-circle" size={28} color="#4CAF50" />
+                <Text style={styles.addButtonText}>Thêm trò chơi</Text>
               </TouchableOpacity>
             </View>
 
@@ -1136,7 +1137,18 @@ const styles = StyleSheet.create({
     color: '#333'
   },
   addButton: {
-    padding: 4
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#E8F5E9',
+    gap: 6
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E7D32'
   },
   emptyCard: {
     backgroundColor: '#fff',

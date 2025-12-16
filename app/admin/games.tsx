@@ -1321,7 +1321,7 @@ export function GameModal({ visible, game, onClose, onSave }: {
                         </View>
                       ))}
 
-                      <Text style={styles.label}>Giải thích (tùy chọn)</Text>
+                      <Text style={styles.label}>Giải thích</Text>
                       <TextInput
                         style={[styles.input, styles.textArea]}
                         placeholder="Giải thích cho đáp án đúng..."

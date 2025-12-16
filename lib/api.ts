@@ -156,7 +156,8 @@ export const api = {
 			return request('/games/result', { method: 'POST', body: JSON.stringify(payload) });
 		},
 		getHistory: (childId: string, params?: any) => request(`/games/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`),
-		getResults: (gameId: string) => request(`/games/${gameId}/results`)
+		getResults: (gameId: string) => request(`/games/${gameId}/results`),
+		gradeResult: (progressId: string, payload: any) => request(`/games/results/${progressId}/grade`, { method: 'POST', body: JSON.stringify(payload) })
 	},
 	appSessions: {
 		start: (childId: string) => request('/app-sessions/start', { method: 'POST', body: JSON.stringify({ childId }) }),

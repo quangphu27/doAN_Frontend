@@ -87,7 +87,6 @@ interface Game {
   imageUrl?: string;
   data: any;
   estimatedTime?: number;
-  // Tên lớp (nếu game thuộc một lớp học cụ thể)
   className?: string;
 }
 
@@ -100,6 +99,9 @@ interface GameResult {
     category: string;
   };
   score: number;
+  teacherScore?: number | null;
+  gradingStatus?: string;
+  resultImage?: string | null;
   timeSpent: number;
   answers: Array<{
     questionId: string;
@@ -161,7 +163,6 @@ export default function PlayScreen() {
     try {
       setLoading(true);
 
-      // Chỉ lấy bài học/trò chơi liên quan đến học sinh trong lớp của bé (nếu là học sinh)
       const lessonsParams: any = { limit: 20 };
       const gamesParams: any = { limit: 20 };
       if (user?.id && user?.vaiTro === 'hocSinh') {
@@ -204,7 +205,6 @@ export default function PlayScreen() {
               completedAt: item.completedAt || item.ngayHoanThanh || item.createdAt || new Date().toISOString()
             }));
 
-            // lưu tập bài học đã hoàn thành
             lessonDoneArray = lessonHistory
               .map((item: any) => item.lesson?.id || item.lesson?._id || item.lesson || item.baiHoc || item.lessonId)
               .filter(Boolean)
@@ -215,20 +215,33 @@ export default function PlayScreen() {
           let gameResults: GameResult[] = [];
           if (gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history) {
             const gameHistory = gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || [];
-            gameResults = gameHistory.map((item: any) => ({
-              id: item.id || item._id,
-              game: {
-                id: item.game?.id || item.game?._id,
-                title: item.game?.title || 'Unknown Game',
-                type: item.game?.type || 'unknown',
-                category: item.game?.category || 'unknown'
-              },
-              score: item.score || 0,
-              timeSpent: item.timeSpent || 0,
-              answers: item.answers || [],
-              achievements: item.achievements || [],
-              completedAt: item.completedAt || item.createdAt || new Date().toISOString()
-            }));
+            gameResults = gameHistory.map((item: any) => {
+              const rawType = item.game?.type || item.loai;
+              const normalizedType =
+                rawType === 'toMau' ? 'coloring' :
+                rawType === 'xepHinh' ? 'puzzle' :
+                rawType === 'ghepDoi' ? 'matching' :
+                rawType === 'doan' || rawType === 'guess_action' ? 'guessing' :
+                rawType || 'unknown';
+
+              return {
+                id: item.id || item._id,
+                game: {
+                  id: item.game?.id || item.game?._id,
+                  title: item.game?.title || item.game?.tieuDe || 'Trò chơi',
+                  type: normalizedType,
+                  category: item.game?.category || item.game?.danhMuc || 'unknown'
+                },
+                score: item.score || item.diemSo || 0,
+                teacherScore: typeof item.teacherScore === 'number' ? item.teacherScore : null,
+                gradingStatus: item.gradingStatus || item.trangThaiChamDiem || 'chuaCham',
+                resultImage: item.resultImage || item.tepKetQua || null,
+                timeSpent: item.timeSpent || item.thoiGianDaDung || 0,
+                answers: item.answers || item.cauTraLoi || [],
+                achievements: item.achievements || [],
+                completedAt: item.completedAt || item.createdAt || item.ngayHoanThanh || new Date().toISOString()
+              } as GameResult;
+            });
 
             gameDoneArray = gameHistory
               .map((item: any) => item.game?.id || item.game?._id || item.troChoi || item.gameId)
@@ -237,7 +250,7 @@ export default function PlayScreen() {
             setCompletedGameIds(new Set<string>(gameDoneArray));
           }
           
-          gameResultsData = [...lessonResults, ...gameResults].sort((a, b) => 
+          gameResultsData = [...gameResults].sort((a, b) => 
             new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
           );
 
@@ -250,17 +263,12 @@ export default function PlayScreen() {
       
       const lessons = lessonsResponse.data?.lessons || [];
       
-      // Transform lessons to handle both Vietnamese and English fields
-      // Lấy thông tin lớp từ lesson data (đã được populate từ backend)
       const transformedLessons = lessons.map((lesson: any) => {
-        // Lấy tên lớp từ lesson.lop (có thể là array hoặc object)
         let className = null;
         if (lesson.lop) {
           if (Array.isArray(lesson.lop) && lesson.lop.length > 0) {
-            // Nếu là array, lấy lớp đầu tiên
             className = lesson.lop[0]?.tenLop || lesson.lop[0]?.name || null;
           } else if (typeof lesson.lop === 'object' && lesson.lop.tenLop) {
-            // Nếu là object
             className = lesson.lop.tenLop || lesson.lop.name || null;
           }
         }
@@ -274,7 +282,7 @@ export default function PlayScreen() {
           level: lesson.level || lesson.capDo,
           imageUrl: lesson.imageUrl || lesson.anhDaiDien,
           estimatedTime: lesson.estimatedTime || lesson.thoiGianUocTinh,
-          className: className, // Thêm tên lớp
+          className: className, 
           content: lesson.content || {
             exercises: lesson.noiDung?.baiTap || []
           }
@@ -318,7 +326,6 @@ export default function PlayScreen() {
         }));
       }
 
-      // Ẩn bài học đã hoàn thành (theo cờ completed hoặc history)
       const filteredLessons = user?.vaiTro === 'hocSinh'
         ? lessonsWithCompletion.filter(lesson => {
             const rawId = (lesson as any).id || (lesson as any)._id || '';
@@ -348,7 +355,6 @@ export default function PlayScreen() {
           }
         }
 
-        // Chuẩn hóa type từ cả trường "type" (game admin) và "loai" (game lớp)
         const rawType = game.type || game.loai;
         const normalizedType =
           rawType === 'toMau' ? 'coloring' :
@@ -357,7 +363,6 @@ export default function PlayScreen() {
           rawType === 'doan' || rawType === 'guess_action' ? 'guessing' :
           rawType;
 
-        // Chuẩn hóa category từ cả "category" và "danhMuc"
         const rawCategory = game.category || game.danhMuc;
         const normalizedCategory =
           rawCategory === 'chuCai' ? 'letter' :
@@ -381,7 +386,6 @@ export default function PlayScreen() {
       });
 
       setGames(transformedGames);
-      // Ẩn game đã hoàn thành
       if (user?.vaiTro === 'hocSinh') {
         const filteredGames = transformedGames.filter(game => {
           const rawId = (game as any).id || (game as any)._id || '';
@@ -610,7 +614,6 @@ export default function PlayScreen() {
       setLessonModalVisible(false);
       setLessonResultsVisible(true);
       
-      // Refresh data to update lesson completion status
       await loadData();
       
       await loadData();
@@ -1214,7 +1217,18 @@ function ResultsList({ gameResults }: { gameResults: GameResult[] }) {
 
   return (
     <View style={styles.listContainer}>
-      {gameResults.map((result) => (
+      {gameResults.map((result) => {
+        const isColoring = result.game.type === 'coloring';
+        const displayScore =
+          isColoring
+            ? (typeof result.teacherScore === 'number' ? `${result.teacherScore}/100` : 'Chưa có kết quả')
+            : `${result.score}/100`;
+        const scoreColor =
+          isColoring
+            ? (typeof result.teacherScore === 'number' ? getScoreColor(result.teacherScore) : '#999')
+            : getScoreColor(result.score);
+
+        return (
         <View key={result.id || (result as any)._id || Math.random().toString()} style={styles.resultCard}>
           <View style={styles.resultHeader}>
             <View style={styles.resultInfo}>
@@ -1231,8 +1245,13 @@ function ResultsList({ gameResults }: { gameResults: GameResult[] }) {
               </Text>
             </View>
             <View style={styles.scoreContainer}>
-              <Text style={[styles.scoreValue, { color: getScoreColor(result.score) }]}>
-                {result.score}/100
+              <Text
+                style={[
+                  styles.scoreValue,
+                  { color: scoreColor }
+                ]}
+              >
+                {displayScore}
               </Text>
             </View>
           </View>
@@ -1244,12 +1263,14 @@ function ResultsList({ gameResults }: { gameResults: GameResult[] }) {
                 {formatTime(result.timeSpent)}
               </Text>
             </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <Text style={styles.detailText}>
-                {result.answers.filter(a => a.isCorrect).length}/{result.answers.length} câu đúng
-              </Text>
-            </View>
+            {result.game.type !== 'coloring' && result.answers.length > 0 && (
+              <View style={styles.detailItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                <Text style={styles.detailText}>
+                  {result.answers.filter(a => a.isCorrect).length}/{result.answers.length} câu đúng
+                </Text>
+              </View>
+            )}
           </View>
 
           {result.achievements.length > 0 && (
@@ -1270,7 +1291,8 @@ function ResultsList({ gameResults }: { gameResults: GameResult[] }) {
             {formatDate(result.completedAt)}
           </Text>
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -1290,11 +1312,9 @@ function LessonModal({ visible, lesson, currentExercise, currentExerciseIndex, u
 }) {
   if (!lesson || !currentExercise) return null;
 
-  // Helper function to get exercises from lesson (supports both Vietnamese and English fields)
   const getExercises = (lesson: Lesson | null): Exercise[] => {
     if (!lesson) return [];
     const exercises = lesson.content?.exercises || (lesson as any).noiDung?.baiTap || [];
-    // Transform Vietnamese exercise format to English format if needed
     return exercises.map((ex: any) => ({
       id: ex._id || ex.id,
       type: ex.loai === 'tracNghiem' ? 'multiple_choice' :

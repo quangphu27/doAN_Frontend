@@ -13,6 +13,9 @@ interface StudentResult {
   classId?: string;
   className?: string;
   score: number;
+  teacherScore?: number | null;
+  gradingStatus?: string;
+  progressId?: string;
   timeSpent: number;
   completedAt?: string;
   attempts: number;
@@ -29,7 +32,16 @@ interface StudentResult {
 
 export default function ItemResults() {
   const router = useRouter();
-  const { type, itemId, title } = useLocalSearchParams();
+  const { type, itemId, title, backTo } = useLocalSearchParams();
+
+  const parsedBackTo = (() => {
+    if (!backTo) return null;
+    try {
+      return JSON.parse(backTo as string);
+    } catch (e) {
+      return null;
+    }
+  })();
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState<StudentResult[]>([]);
   const [notSubmitted, setNotSubmitted] = useState<StudentResult[]>([]);
@@ -73,15 +85,26 @@ export default function ItemResults() {
     return `${m}p${s.toString().padStart(2, '0')}s`;
   };
 
-  const goDetail = (studentId: string, studentName?: string) => {
+  const goDetail = (student: StudentResult) => {
+    const backTo = {
+      pathname: '/teacher/item-results',
+      params: {
+        type,
+        itemId,
+        title: title || itemInfo?.title || itemInfo?.tieuDe
+      }
+    };
     router.push({
       pathname: '/result-detail',
       params: {
         type,
         itemId,
         title: title || itemInfo?.title || itemInfo?.tieuDe,
-        studentId,
-        studentName: studentName || '',
+        studentId: student.studentId,
+        studentName: student.studentName || '',
+        gameType: itemInfo?.type || itemInfo?.loai || '',
+        progressId: student.progressId || '',
+        backTo: JSON.stringify(backTo)
       }
     } as any);
   };
@@ -89,7 +112,11 @@ export default function ItemResults() {
   const buildImage = (path?: string | null) => {
     if (!path) return undefined;
     if (path.startsWith('http')) return path;
-    return `${API}/${path}`;
+    let cleaned = path.replace(/\\/g, '/');
+    cleaned = cleaned.replace(/^\/+/, '');
+    cleaned = cleaned.replace(/^uploads\/+uploads\//, 'uploads/');
+    if (!cleaned.startsWith('uploads/')) cleaned = `uploads/${cleaned}`;
+    return `${API}/${cleaned}`;
   };
 
   if (loading) {
@@ -103,7 +130,24 @@ export default function ItemResults() {
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#4CAF50', '#45A049']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => {
+            if (parsedBackTo && parsedBackTo.pathname) {
+              router.replace(parsedBackTo as any);
+            } else if (itemId && type && backTo) {
+              // fallback nếu có backTo truyền vào
+              router.replace(backTo as any);
+            } else if ((useLocalSearchParams() as any).classId) {
+              const classIdParam = (useLocalSearchParams() as any).classId;
+              router.replace({
+                pathname: '/teacher/class-progress',
+                params: { classId: classIdParam }
+              } as any);
+            } else {
+              router.back();
+            }
+          }}
+        >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{title || itemInfo?.title || itemInfo?.tieuDe || 'Kết quả'}</Text>
@@ -142,16 +186,18 @@ export default function ItemResults() {
                   <Text style={styles.name}>{s.studentName}</Text>
                   <Text style={styles.sub}>{s.className}</Text>
                 </View>
-                <Text style={[styles.score, { color: getScoreColor(s.score) }]}>{s.score}%</Text>
+                <Text style={[styles.score, { color: getScoreColor(s.teacherScore ?? s.score) }]}>
+                  {typeof s.teacherScore === 'number' ? `${s.teacherScore}%` : `${s.score}%`}
+                </Text>
               </View>
               <View style={styles.cardStats}>
                 <Text style={styles.statText}>Thời gian: {formatTime(s.timeSpent || 0)}</Text>
-                <Text style={styles.statText}>Lần thử: {s.attempts || 1}</Text>
+                //<Text style={styles.statText}>Lần thử: {s.attempts || 1}</Text>
               </View>
               {s.resultImage && (
                 <Image source={{ uri: buildImage(s.resultImage) }} style={styles.preview} resizeMode="cover" />
               )}
-              <TouchableOpacity style={styles.detailBtn} onPress={() => goDetail(s.studentId, s.studentName)}>
+              <TouchableOpacity style={styles.detailBtn} onPress={() => goDetail(s)}>
                 <Text style={styles.detailText}>Xem chi tiết</Text>
                 <Ionicons name="chevron-forward" size={16} color="#4CAF50" />
               </TouchableOpacity>

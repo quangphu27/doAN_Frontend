@@ -54,10 +54,16 @@ export default function ResultsScreen() {
       let gameResults: GameResult[] = [];
       if (gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || Array.isArray(gameHistoryResponse.data)) {
         const gameHistory = gameHistoryResponse.data?.data?.history || gameHistoryResponse.data?.history || gameHistoryResponse.data || [];
+        console.log('[Results] raw game history', gameHistory);
         gameResults = gameHistory
           .filter((item: any) => {
-            const type = item.game?.type || item.gameType || item.loai;
-            return type !== 'lesson';
+            const type = (item.game?.type || item.gameType || item.loai || '').toLowerCase();
+            const gameId = item.game?.id || item.game?._id || item.troChoi?._id || item.troChoi?.id;
+            const keep = type !== 'lesson' && !!gameId;
+            if (!keep) {
+              console.log('[Results] filtered out', { type, gameId, item });
+            }
+            return keep;
           })
           .map((item: any) => ({
             id: item.id || item._id,
@@ -72,10 +78,12 @@ export default function ResultsScreen() {
             completedAt: item.completedAt || item.createdAt || item.ngayHoanThanh || new Date().toISOString()
           }));
       }
-        const allResults = [...gameResults].sort((a, b) => 
+      const gamesOnly = gameResults.filter(r => (r.game.type || '').toLowerCase() !== 'lesson' && !!r.game.id);
+      const allResults = [...gamesOnly].sort((a, b) => 
         new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
       );
       
+      console.log('[Results] final games', allResults);
       setResults(allResults);
     } catch (error) {
       console.error('Error loading results:', error);

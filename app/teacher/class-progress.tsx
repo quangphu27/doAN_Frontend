@@ -117,13 +117,18 @@ export default function ClassProgress() {
   };
 
   const handleViewAssignment = (item: LessonStat | GameStat, type: 'lesson' | 'game') => {
+    const backTo = {
+      pathname: '/teacher/class-progress',
+      params: { classId }
+    };
     router.push({
       pathname: '/teacher/item-results',
       params: {
         classId: classId as string,
         itemId: item.id,
         type,
-        title: item.title
+        title: item.title,
+        backTo: JSON.stringify(backTo)
       }
     } as any);
   };

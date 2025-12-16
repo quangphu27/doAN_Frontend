@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../lib/api';
+import { API } from '../../constants/config';
 
 interface Answer {
 	exerciseId: string;
@@ -20,6 +21,11 @@ interface StudentResult {
 	studentName: string;
 	className?: string;
 	score: number;
+	teacherScore?: number | null;
+	gradingStatus?: string;
+	progressId?: string;
+	resultImage?: string | null;
+	comment?: string;
 	timeSpent: number;
 	attempts: number;
 	answers?: Answer[];
@@ -27,10 +33,24 @@ interface StudentResult {
 
 export default function ResultDetail() {
 	const router = useRouter();
-	const { type, itemId, title, studentId, studentName } = useLocalSearchParams();
+	const { type, itemId, title, studentId, studentName, gameType, progressId, backTo } = useLocalSearchParams();
 	const [loading, setLoading] = useState(true);
 	const [result, setResult] = useState<StudentResult | null>(null);
-const [questionMap, setQuestionMap] = useState<Record<string, { question?: string; correctAnswer?: string; label?: string; options?: string[] }>>({});
+	const [questionMap, setQuestionMap] = useState<Record<string, { question?: string; correctAnswer?: string; label?: string; options?: string[] }>>({});
+	const [teacherScoreInput, setTeacherScoreInput] = useState<string>('');
+	const [commentInput, setCommentInput] = useState<string>('');
+	const [saving, setSaving] = useState(false);
+
+	const isColoringGame = gameType === 'toMau' || gameType === 'coloring';
+
+	const parsedBackTo = (() => {
+		if (!backTo) return null;
+		try {
+			return JSON.parse(backTo as string);
+		} catch (e) {
+			return null;
+		}
+	})();
 
 	useEffect(() => {
 		loadData();
@@ -63,24 +83,27 @@ const [questionMap, setQuestionMap] = useState<Record<string, { question?: strin
 				});
 				setQuestionMap(qMap);
 				console.log('[ResultDetail] lesson qMap', qMap);
-				const found = (res.data.submittedStudents || []).find((s: any) => s.studentId === studentId);
-				if (found) {
-					const enrichedAnswers = (found.answers || []).map((a: Answer, idx: number) => {
-						const info = qMap[a.exerciseId] || {};
-						return {
-							...a,
-							questionText: a.questionText || info.question,
-							correctAnswer: a.correctAnswer || info.correctAnswer,
-							questionLabel: a.questionLabel || info.label || `Câu ${idx + 1}`,
-							displayId: a.displayId || a.questionLabel || info.label || `Câu ${idx + 1}`
-						};
-					});
-					const merged = { ...found, answers: enrichedAnswers };
-					setResult(merged);
-					console.log('[ResultDetail] lesson enriched answers', merged);
-				} else {
+				const list = res.data.submittedStudents || [];
+				const found = list.find((s: any) => s.studentId === studentId) || list[0];
+				if (!found) {
+					console.log('[ResultDetail] lesson no result found for studentId', studentId, 'list length', list.length);
 					setResult(null);
+					return;
 				}
+
+				const enrichedAnswers = (found.answers || []).map((a: Answer, idx: number) => {
+					const info = qMap[a.exerciseId] || {};
+					return {
+						...a,
+						questionText: a.questionText || info.question,
+						correctAnswer: a.correctAnswer || info.correctAnswer,
+						questionLabel: a.questionLabel || info.label || `Câu ${idx + 1}`,
+						displayId: a.displayId || a.questionLabel || info.label || `Câu ${idx + 1}`
+					};
+				});
+				const merged: StudentResult = { ...found, answers: enrichedAnswers };
+				setResult(merged);
+				console.log('[ResultDetail] lesson enriched answers', merged);
 			} else {
 				const [res, gameDetail] = await Promise.all([
 					api.games.getResults(itemId as string),
@@ -109,26 +132,38 @@ const [questionMap, setQuestionMap] = useState<Record<string, { question?: strin
 				setQuestionMap(qMap);
 				console.log('[ResultDetail] game qMap', qMap);
 
-				const found = (res.data.submittedStudents || []).find((s: any) => s.studentId === studentId);
-				if (found) {
-					const enrichedAnswers = (found.answers || []).map((a: Answer, idx: number) => {
-						const info = qMap[a.exerciseId] || {};
-						return {
-							...a,
-							questionText: a.questionText || info.question,
-							correctAnswer: a.correctAnswer || info.correctAnswer,
-							questionLabel: a.questionLabel || info.label || `Câu ${idx + 1}`,
-							displayId: a.displayId || a.questionLabel || info.label || `Câu ${idx + 1}`
-						};
-					});
-					const merged = { ...found, answers: enrichedAnswers };
-					setResult(merged);
-					console.log('[ResultDetail] game enriched answers', merged);
-				} else {
+				const list = res.data.submittedStudents || [];
+				const found = list.find((s: any) => s.studentId === studentId) || list[0];
+				if (!found) {
+					console.log('[ResultDetail] game no result found for studentId', studentId, 'list length', list.length);
 					setResult(null);
+					return;
 				}
+
+				const enrichedAnswers = (found.answers || []).map((a: Answer, idx: number) => {
+					const info = qMap[a.exerciseId] || {};
+					return {
+						...a,
+						questionText: a.questionText || info.question,
+						correctAnswer: a.correctAnswer || info.correctAnswer,
+						questionLabel: a.questionLabel || info.label || `Câu ${idx + 1}`,
+						displayId: a.displayId || a.questionLabel || info.label || `Câu ${idx + 1}`
+					};
+				});
+				const merged: StudentResult = { 
+					...found, 
+					answers: enrichedAnswers,
+					progressId: (found as any).progressId || (progressId as string | undefined) || undefined
+				};
+				setResult(merged);
+				setTeacherScoreInput(
+					typeof merged.teacherScore === 'number' ? String(merged.teacherScore) : ''
+				);
+				setCommentInput((merged as any).comment || '');
+				console.log('[ResultDetail] game enriched answers', merged);
 			}
 		} catch (e: any) {
+			console.log('[ResultDetail] loadData error', e?.message || e);
 			setResult(null);
 		} finally {
 			setLoading(false);
@@ -139,6 +174,44 @@ const [questionMap, setQuestionMap] = useState<Record<string, { question?: strin
 		const m = Math.floor(seconds / 60);
 		const s = seconds % 60;
 		return `${m}p${s.toString().padStart(2, '0')}s`;
+	};
+
+	const buildImage = (path?: string | null) => {
+		if (!path) return undefined;
+		if (path.startsWith('http')) return path;
+
+		let cleaned = path.replace(/\\/g, '/');
+		cleaned = cleaned.replace(/^\/+/, '');
+		cleaned = cleaned.replace(/^uploads\/+uploads\//, 'uploads/');
+
+		if (!cleaned.startsWith('uploads/')) {
+			cleaned = `uploads/${cleaned}`;
+		}
+
+		return `${API}/${cleaned}`;
+	};
+
+	const handleSaveGrade = async () => {
+		if (!result || !result.progressId) return;
+		const scoreValue = parseFloat(teacherScoreInput);
+		if (Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+			alert('Điểm phải từ 0 đến 100');
+			return;
+		}
+
+		try {
+			setSaving(true);
+			const payload = {
+				teacherScore: scoreValue,
+				comment: commentInput
+			};
+			await api.games.gradeResult(result.progressId as any, payload);
+			setResult(prev => prev ? { ...prev, teacherScore: scoreValue } : prev);
+		} catch (e) {
+			console.log('[ResultDetail] grade error', e);
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	const renderAnswer = (a: Answer, idx: number) => {
@@ -197,10 +270,33 @@ const [questionMap, setQuestionMap] = useState<Record<string, { question?: strin
 		);
 	}
 
+	const systemScore = 0;
+	const teacherScoreValue = typeof result.teacherScore === 'number' ? result.teacherScore : null;
+	const resultImageUri = buildImage(
+		result.resultImage ||
+		(result as any).resultImagePath ||
+		(result as any).tepKetQua ||
+		''
+	);
+
+	const handleGoBack = () => {
+		const fallbackDest = {
+			pathname: '/teacher/item-results',
+			params: {
+				type,
+				itemId,
+				title
+			}
+		};
+
+		const dest = (parsedBackTo && parsedBackTo.pathname) ? parsedBackTo : fallbackDest;
+		router.replace(dest as any);
+	};
+
 	return (
 		<View style={styles.container}>
 			<LinearGradient colors={['#4CAF50', '#45A049']} style={styles.header}>
-				<TouchableOpacity onPress={() => router.back()}>
+				<TouchableOpacity onPress={handleGoBack}>
 					<Ionicons name="arrow-back" size={24} color="#fff" />
 				</TouchableOpacity>
 				<View style={{ flex: 1, alignItems: 'center' }}>
@@ -215,13 +311,53 @@ const [questionMap, setQuestionMap] = useState<Record<string, { question?: strin
 					<Text style={styles.infoName}>{result.studentName}</Text>
 					<Text style={styles.infoSub}>{result.className}</Text>
 					<View style={styles.infoRow}>
-						<Text style={styles.infoItem}>Điểm: <Text style={[styles.bold, { color: '#4CAF50' }]}>{result.score}%</Text></Text>
+						<Text style={styles.infoItem}>
+							Điểm hệ thống:{' '}
+							<Text style={[styles.bold, { color: '#4CAF50' }]}>{systemScore}</Text>
+						</Text>
 						<Text style={styles.infoItem}>Thời gian: {formatTime(result.timeSpent || 0)}</Text>
 					</View>
-					<Text style={styles.infoItem}>Lần thử: {result.attempts || 1}</Text>
+					{teacherScoreValue !== null && (
+						<View style={styles.infoRow}>
+							<Text style={styles.infoItem}>
+								Điểm giáo viên:{' '}
+								<Text style={[styles.bold, { color: '#FF9800' }]}>{teacherScoreValue}</Text>
+							</Text>
+							</View>
+					)}
+					{isColoringGame && resultImageUri && (
+						<Image
+							source={{ uri: resultImageUri }}
+							style={styles.coloringPreview}
+							resizeMode="contain"
+						/>
+					)}
 				</View>
 
-				<Text style={styles.sectionTitle}>Chi tiết câu hỏi</Text>
+				{isColoringGame && (
+					<View style={styles.gradingCard}>
+						<Text style={styles.sectionTitle}>Chấm điểm trò chơi tô màu</Text>
+						<View style={styles.gradeRow}>
+							<Text style={styles.gradeLabel}>Điểm (0-100):</Text>
+							<TextInput
+								style={styles.gradeInput}
+								value={teacherScoreInput}
+								onChangeText={setTeacherScoreInput}
+								keyboardType="numeric"
+								placeholder="Nhập điểm"
+							/>
+						</View>
+		
+						<TouchableOpacity
+							style={[styles.saveButton, saving && { opacity: 0.6 }]}
+							onPress={handleSaveGrade}
+							disabled={saving}
+						>
+							<Text style={styles.saveButtonText}>{saving ? 'Đang lưu...' : 'Lưu chấm điểm'}</Text>
+						</TouchableOpacity>
+					</View>
+				)}
+
 				{result.answers?.length ? (
 					result.answers.map(renderAnswer)
 				) : (
@@ -262,6 +398,69 @@ const styles = StyleSheet.create({
 	infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
 	infoItem: { fontSize: 14, color: '#444', marginTop: 4 },
 	bold: { fontWeight: '700' },
+	coloringPreview: {
+		marginTop: 12,
+		width: '100%',
+		height: 260,
+		borderRadius: 12,
+		backgroundColor: '#eee'
+	},
+	gradingCard: {
+		backgroundColor: '#fff',
+		borderRadius: 12,
+		padding: 14,
+		marginBottom: 12,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.06,
+		shadowRadius: 3,
+		elevation: 1
+	},
+	gradeRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 8,
+		marginBottom: 8
+	},
+	gradeLabel: {
+		fontSize: 14,
+		color: '#444',
+		marginRight: 8
+	},
+	gradeInput: {
+		flex: 1,
+		borderWidth: 1,
+		borderColor: '#ddd',
+		borderRadius: 8,
+		paddingHorizontal: 10,
+		paddingVertical: 8,
+		fontSize: 14,
+		backgroundColor: '#fafafa'
+	},
+	commentInput: {
+		borderWidth: 1,
+		borderColor: '#ddd',
+		borderRadius: 8,
+		paddingHorizontal: 10,
+		paddingVertical: 8,
+		fontSize: 14,
+		backgroundColor: '#fafafa',
+		minHeight: 60,
+		textAlignVertical: 'top',
+		marginTop: 6
+	},
+	saveButton: {
+		marginTop: 12,
+		backgroundColor: '#4CAF50',
+		paddingVertical: 10,
+		borderRadius: 8,
+		alignItems: 'center'
+	},
+	saveButtonText: {
+		color: '#fff',
+		fontWeight: '600',
+		fontSize: 15
+	},
 	sectionTitle: { fontSize: 16, fontWeight: '700', color: '#333', marginTop: 12, marginBottom: 8 },
 	answerCard: {
 		backgroundColor: '#fff',

@@ -18,6 +18,7 @@ import { api } from '../../../lib/api';
 import { getImageSource } from '../../../utils/imageUtils';
 import { useAuth } from '../../../context/AuthContext';
 import { useSound } from '../../../hooks/useSound';
+import { captureRef } from 'react-native-view-shot';
 
 const { width, height } = Dimensions.get('window');
 
@@ -66,6 +67,7 @@ export default function ColoringGame() {
   const [brushSize, setBrushSize] = useState(5);
   const celebrationScale = useRef(new Animated.Value(0)).current;
   const celebrationOpacity = useRef(new Animated.Value(0)).current;
+  const imageContainerRef = useRef<View>(null);
 
   useEffect(() => {
     setStartTime(Date.now());
@@ -249,18 +251,27 @@ export default function ColoringGame() {
     };
 
     try {
-      await api.games.saveResult({
+      const resultImageBase64 = await captureResultImage();
+      
+      const payload: any = {
         gameId,
         userId: user?.id || '',
-        score: Math.min(100, Math.round((drawingPoints.length / 50) * 100)), 
+        score: 0,
         timeSpent: completionTime,
         gameType: 'coloring',
         resultData: {
           drawingData: JSON.stringify(currentState.drawingPoints), 
           colorsUsed: currentState.colorsUsed
         }
-      });
+      };
+
+      if (resultImageBase64) {
+        payload.resultImageBase64 = resultImageBase64;
+      }
+
+      await api.games.saveResult(payload);
     } catch (error) {
+      console.error('Error saving result:', error);
     }
 
     setTimeout(() => {
@@ -289,8 +300,34 @@ export default function ColoringGame() {
     }, 2000);
   };
 
+  const captureResultImage = async (): Promise<string | null> => {
+    try {
+      if (!imageContainerRef.current) {
+        return null;
+      }
+
+      // Giảm dung lượng ảnh để tránh lỗi "request entity too large" khi gửi lên server
+      const uri = await captureRef(imageContainerRef.current, {
+        format: 'jpg',
+        quality: 0.5,
+        result: 'base64',
+        width: 256,
+        height: 256
+      });
+
+      return `data:image/jpeg;base64,${uri}`;
+    } catch (error) {
+      console.error('Error capturing image:', error);
+      return null;
+    }
+  };
+
   const handleSaveArtwork = async () => {
     try {
+      Alert.alert('Đang xử lý...', 'Vui lòng đợi trong giây lát', [], { cancelable: false });
+
+      const resultImageBase64 = await captureResultImage();
+      
       if (!gameId) {
         const altGameId = params.id || params.game_id || params.gameId;
         
@@ -307,29 +344,24 @@ export default function ColoringGame() {
           completionTime: Math.round((Date.now() - startTime) / 1000)
         };
 
-        const score = Math.min(100, Math.max(50, Math.round((drawingPoints.length / 50) * 100)));
-
-        const response = await api.games.saveResult({
+        const payload: any = {
           gameId: altGameId as string,
           userId: user?.id || '',
-          score: score,
+          // Backend yêu cầu score, tạm gửi 0 (giáo viên chấm lại sau)
+          score: 0,
           timeSpent: Math.round((Date.now() - startTime) / 1000),
           gameType: 'coloring',
           resultData: resultData
-        });
-        
-        const isSuccess = response && response.data && (
-          response.data.success === true || 
-          response.data.data?.success === true ||
-          response.status === 200
-        );
-        
-        if (isSuccess) {
-          Alert.alert('Thành công', 'Tác phẩm đã được lưu vào hồ sơ học tập!');
-          router.back();
-        } else {
-          Alert.alert('Lỗi', 'Không thể lưu tác phẩm');
+        };
+
+        if (resultImageBase64) {
+          payload.resultImageBase64 = resultImageBase64;
         }
+
+        // Nếu không ném lỗi là đã lưu thành công (request() đã kiểm tra res.ok)
+        await api.games.saveResult(payload);
+        Alert.alert('Thành công', 'Tác phẩm đã được lưu vào hồ sơ học tập!');
+        router.back();
         return;
       }
 
@@ -341,30 +373,26 @@ export default function ColoringGame() {
         completionTime: Math.round((Date.now() - startTime) / 1000)
       };
 
-      const score = Math.min(100, Math.max(50, Math.round((drawingPoints.length / 50) * 100)));
-
-      const response = await api.games.saveResult({
+      const payload: any = {
         gameId: gameId,
         userId: user?.id || '',
-        score: score,
+        // Backend yêu cầu score, tạm gửi 0 (giáo viên chấm lại sau)
+        score: 0,
         timeSpent: Math.round((Date.now() - startTime) / 1000),
         gameType: 'coloring',
         resultData: resultData
-      });
+      };
 
-      const isSuccess = response && response.data && (
-        response.data.success === true || 
-        response.data.data?.success === true ||
-        response.status === 200
-      );
-      
-      if (isSuccess) {
-        Alert.alert('Thành công', 'Tác phẩm đã được lưu vào hồ sơ học tập!');
-        router.back();
-      } else {
-        Alert.alert('Lỗi', 'Không thể lưu tác phẩm');
+      if (resultImageBase64) {
+        payload.resultImageBase64 = resultImageBase64;
       }
+
+      // Nếu không ném lỗi là đã lưu thành công
+      await api.games.saveResult(payload);
+      Alert.alert('Thành công', 'Tác phẩm đã được lưu vào hồ sơ học tập!');
+      router.back();
     } catch (error) {
+      console.error('Error saving artwork:', error);
       Alert.alert('Lỗi', 'Không thể lưu tác phẩm');
     }
   };
@@ -413,7 +441,7 @@ export default function ColoringGame() {
     
     return (
       <View style={styles.coloringContainer}>
-        <View style={styles.imageContainer}>
+        <View ref={imageContainerRef} style={styles.imageContainer} collapsable={false}>
           {currentImageUrl ? (
             <Image
               source={getImageSource(currentImageUrl)}

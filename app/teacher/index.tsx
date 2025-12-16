@@ -173,11 +173,8 @@ export default function TeacherHome() {
                 <TouchableOpacity
                   style={styles.profileMenuItem}
                   onPress={() => {
-                    Alert.alert(
-                      'Thông tin cá nhân',
-                      `${user.hoTen || ''}\n${user.email || ''}`.trim()
-                    );
                     setProfileMenuVisible(false);
+                    router.push('/teacher/profile' as any);
                   }}
                 >
                   <Ionicons name="person" size={18} color="#333" />
@@ -186,10 +183,8 @@ export default function TeacherHome() {
                 <TouchableOpacity
                   style={styles.profileMenuItem}
                   onPress={() => {
-                    Alert.alert(
-                      'Đổi mật khẩu'
-                    );
                     setProfileMenuVisible(false);
+                    router.push('/teacher/change-password' as any);
                   }}
                 >
                   <Ionicons name="key" size={18} color="#333" />

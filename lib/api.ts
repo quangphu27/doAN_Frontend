@@ -57,7 +57,9 @@ export const api = {
 		complete: (id: string, childId: string) => request(`/lessons/${id}/complete`, { method: 'POST', body: JSON.stringify({ childId }) }),
 		checkCompletion: (lessonId: string, childId: string) => request(`/lessons/${lessonId}/completion/${childId}`),
 		getHistory: (childId: string, params?: any) => request(`/lessons/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`),
-		getResults: (lessonId: string) => request(`/lessons/${lessonId}/results`)
+		getResults: (lessonId: string) => request(`/lessons/${lessonId}/results`),
+		previewResultsPdf: (lessonId: string) => request(`/lessons/${lessonId}/results/export/pdf`),
+		sendResultsReportEmail: (lessonId: string) => request(`/lessons/${lessonId}/results/send-email`)
 	},
 	progress: {
 		get: (id: string) => request(`/progress/${id}`),
@@ -105,7 +107,7 @@ export const api = {
 		delete: (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
 		resetPassword: (id: string, payload: any) => request(`/users/${id}/reset-password`, { method: 'PUT', body: JSON.stringify(payload) })
 	},
-		games: {
+	games: {
 		list: (params?: any) => request(`/games${params ? '?' + new URLSearchParams(params).toString() : ''}`),
 		get: (id: string) => request(`/games/${id}`),
 		create: (payload: any) => request('/games', { method: 'POST', body: JSON.stringify(payload) }),
@@ -157,6 +159,8 @@ export const api = {
 		},
 		getHistory: (childId: string, params?: any) => request(`/games/child/${childId}/history${params ? '?' + new URLSearchParams(params).toString() : ''}`),
 		getResults: (gameId: string) => request(`/games/${gameId}/results`),
+		previewResultsPdf: (gameId: string) => request(`/games/${gameId}/results/export/pdf`),
+		sendResultsReportEmail: (gameId: string) => request(`/games/${gameId}/results/send-email`),
 		gradeResult: (progressId: string, payload: any) => request(`/games/results/${progressId}/grade`, { method: 'POST', body: JSON.stringify(payload) })
 	},
 	appSessions: {
@@ -177,6 +181,8 @@ export const api = {
 		removeStudent: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}`, { method: 'DELETE' }),
 		getProgress: (id: string) => request(`/classes/${id}/progress`),
 		getStudentProgress: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}/progress`),
+		previewStudentReportPdf: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}/report/pdf`),
+		sendStudentReportEmail: (id: string, studentId: string) => request(`/classes/${id}/students/${studentId}/report/send-email`),
 		getLessonsStats: (id: string) => request(`/classes/${id}/lessons/stats`),
 		createLesson: (classId: string, payload: any) => request(`/classes/${classId}/lessons`, { method: 'POST', body: JSON.stringify(payload) }),
 		updateLessonInClass: (classId: string, lessonId: string, payload: any) => request(`/classes/${classId}/lessons/${lessonId}`, { method: 'PUT', body: JSON.stringify(payload) }),

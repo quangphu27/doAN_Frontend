@@ -52,6 +52,7 @@ export default function ItemResults() {
     averageScore: 0
   });
   const [itemInfo, setItemInfo] = useState<any>(null);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -119,6 +120,23 @@ export default function ItemResults() {
     return `${API}/${cleaned}`;
   };
 
+  const handleSendReportEmail = async () => {
+    try {
+      if (!itemId || !type) return;
+      setSending(true);
+      if (type === 'lesson') {
+        await api.lessons.sendResultsReportEmail(itemId as string);
+      } else {
+        await api.games.sendResultsReportEmail(itemId as string);
+      }
+      alert('Đã gửi báo cáo PDF về email của giáo viên.');
+    } catch (e: any) {
+      alert(e?.message || 'Không thể gửi báo cáo qua email');
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -169,10 +187,23 @@ export default function ItemResults() {
             <Text style={styles.summaryLabel}>Chưa nộp</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: getScoreColor(summary.averageScore) }]}>{summary.averageScore}%</Text>
+            <Text style={[styles.summaryValue, { color: getScoreColor(summary.averageScore) }]}>
+              {summary.averageScore}%
+            </Text>
             <Text style={styles.summaryLabel}>Điểm TB</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: '#4CAF50', marginBottom: 16 }]}
+          onPress={handleSendReportEmail}
+          disabled={sending}
+        >
+          <Ionicons name="send-outline" size={18} color="#fff" />
+          <Text style={styles.actionButtonText}>
+            {sending ? 'Đang gửi...' : 'Gửi báo cáo qua email'}
+          </Text>
+        </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Học sinh đã nộp ({submitted.length})</Text>
         {submitted.length === 0 ? (
@@ -192,7 +223,6 @@ export default function ItemResults() {
               </View>
               <View style={styles.cardStats}>
                 <Text style={styles.statText}>Thời gian: {formatTime(s.timeSpent || 0)}</Text>
-                //<Text style={styles.statText}>Lần thử: {s.attempts || 1}</Text>
               </View>
               {s.resultImage && (
                 <Image source={{ uri: buildImage(s.resultImage) }} style={styles.preview} resizeMode="cover" />
@@ -258,6 +288,20 @@ const styles = StyleSheet.create({
   summaryItem: { alignItems: 'center', flex: 1 },
   summaryValue: { fontSize: 18, fontWeight: '700', color: '#333' },
   summaryLabel: { fontSize: 12, color: '#666', marginTop: 4 },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600'
+  },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#333', marginBottom: 8 },
   emptyText: { color: '#888', marginBottom: 12 },
   card: {
@@ -280,6 +324,6 @@ const styles = StyleSheet.create({
   statText: { fontSize: 13, color: '#444' },
   preview: { marginTop: 10, height: 180, borderRadius: 10, backgroundColor: '#eee' },
   detailBtn: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  detailText: { fontSize: 14, color: '#4CAF50', fontWeight: '600' }
+  detailText: { fontSize: 14, color: '#4CAF50', fontWeight: '600' },
 });
 

@@ -61,6 +61,7 @@ export default function StudentProgress() {
   const { classId, studentId } = useLocalSearchParams();
   const [data, setData] = useState<StudentProgressData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     loadProgress();
@@ -160,6 +161,28 @@ export default function StudentProgress() {
               <Text style={styles.statLabel}>Điểm trung bình</Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#4CAF50', marginTop: 16 }]}
+            onPress={async () => {
+              try {
+                if (!classId || !studentId) return;
+                setSending(true);
+                await api.classes.sendStudentReportEmail(classId as string, studentId as string);
+                alert('Đã gửi báo cáo PDF về email của giáo viên.');
+              } catch (e: any) {
+                alert(e?.message || 'Không thể gửi báo cáo qua email');
+              } finally {
+                setSending(false);
+              }
+            }}
+            disabled={sending}
+          >
+            <Ionicons name="send-outline" size={18} color="#fff" />
+            <Text style={styles.actionButtonText}>
+              {sending ? 'Đang gửi...' : 'Gửi báo cáo qua email'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -407,6 +430,20 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600'
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600'
   }
 });

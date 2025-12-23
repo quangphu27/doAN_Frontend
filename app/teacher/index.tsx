@@ -8,7 +8,8 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -164,47 +165,10 @@ export default function TeacherHome() {
             <Text style={styles.name}>{user?.hoTen}</Text>
             <Text style={styles.subtitle}>Giáo viên</Text>
           </View>
-          <View>
+          <View style={styles.profileButtonContainer}>
             <TouchableOpacity onPress={() => setProfileMenuVisible((v) => !v)}>
               <Ionicons name="person-circle-outline" size={30} color="#fff" />
             </TouchableOpacity>
-            {profileMenuVisible && (
-              <View style={styles.profileMenu}>
-                <TouchableOpacity
-                  style={styles.profileMenuItem}
-                  onPress={() => {
-                    setProfileMenuVisible(false);
-                    router.push('/teacher/profile' as any);
-                  }}
-                >
-                  <Ionicons name="person" size={18} color="#333" />
-                  <Text style={styles.profileMenuText}>Xem thông tin cá nhân</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.profileMenuItem}
-                  onPress={() => {
-                    setProfileMenuVisible(false);
-                    router.push('/teacher/change-password' as any);
-                  }}
-                >
-                  <Ionicons name="key" size={18} color="#333" />
-                  <Text style={styles.profileMenuText}>Đổi mật khẩu</Text>
-                </TouchableOpacity>
-                <View style={styles.profileMenuDivider} />
-                <TouchableOpacity
-                  style={styles.profileMenuItem}
-                  onPress={() => {
-                    setProfileMenuVisible(false);
-                    logout();
-                  }}
-                >
-                  <Ionicons name="log-out" size={18} color="#E53935" />
-                  <Text style={[styles.profileMenuText, { color: '#E53935' }]}>
-                    Đăng xuất
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         </View>
       </LinearGradient>
@@ -304,6 +268,57 @@ export default function TeacherHome() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={profileMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setProfileMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setProfileMenuVisible(false)}
+        >
+          <View style={styles.profileMenuContainer}>
+            <View style={styles.profileMenu} onStartShouldSetResponder={() => true}>
+              <TouchableOpacity
+                style={styles.profileMenuItem}
+                onPress={() => {
+                  setProfileMenuVisible(false);
+                  router.push('/teacher/profile' as any);
+                }}
+              >
+                <Ionicons name="person" size={18} color="#333" />
+                <Text style={styles.profileMenuText}>Xem thông tin cá nhân</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.profileMenuItem}
+                onPress={() => {
+                  setProfileMenuVisible(false);
+                  router.push('/teacher/change-password' as any);
+                }}
+              >
+                <Ionicons name="key" size={18} color="#333" />
+                <Text style={styles.profileMenuText}>Đổi mật khẩu</Text>
+              </TouchableOpacity>
+              <View style={styles.profileMenuDivider} />
+              <TouchableOpacity
+                style={styles.profileMenuItem}
+                onPress={() => {
+                  setProfileMenuVisible(false);
+                  logout();
+                }}
+              >
+                <Ionicons name="log-out" size={18} color="#E53935" />
+                <Text style={[styles.profileMenuText, { color: '#E53935' }]}>
+                  Đăng xuất
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -481,10 +496,22 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500'
   },
+  profileButtonContainer: {
+    position: 'relative',
+    zIndex: 1
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 50,
+    paddingRight: 20
+  },
+  profileMenuContainer: {
+    alignItems: 'flex-end'
+  },
   profileMenu: {
-    position: 'absolute',
-    top: 40,
-    right: 0,
     backgroundColor: '#fff',
     borderRadius: 8,
     paddingVertical: 8,
@@ -493,9 +520,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 4,
-    minWidth: 200,
-    zIndex: 1000
+    elevation: 5,
+    minWidth: 200
   },
   profileMenuItem: {
     flexDirection: 'row',

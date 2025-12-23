@@ -151,21 +151,21 @@ export default function ChildManagement() {
   const loadGameResults = async (childId: string) => {
     try {
       setLoadingGameResults(true);
-      const response = await api.games.getHistory(childId, { limit: 50 });
+      const response = await api.children.getGameResults(childId, { limit: 50 });
       
       let results: GameResult[] = [];
-      if (response.data?.data?.history || response.data?.history) {
-        const gameHistory = response.data?.data?.history || response.data?.history || [];
-        results = gameHistory.map((item: any) => ({
-          id: item.id || item._id,
+      if (response.data?.gameResults) {
+        const gameResultsData = response.data.gameResults || [];
+        results = gameResultsData.map((item: any) => ({
+          id: item._id || item.id,
           game: {
-            id: item.game?.id || item.game?._id,
-            title: item.game?.title || item.game?.tieuDe || 'Trò chơi',
-            type: item.game?.type || 'unknown'
+            id: item.troChoi?._id || item.troChoi?.id || item.troChoi,
+            title: item.troChoi?.tieuDe || 'Trò chơi',
+            type: item.troChoi?.loai || 'unknown'
           },
-          score: item.score || item.diemSo || 0,
-          timeSpent: item.timeSpent || item.thoiGian || 0,
-          completedAt: item.completedAt || item.createdAt || new Date().toISOString()
+          score: item.diemSo || 0,
+          timeSpent: item.thoiGianDaDung || 0,
+          completedAt: item.ngayHoanThanh || item.createdAt || item.updatedAt || new Date().toISOString()
         }));
       }
       

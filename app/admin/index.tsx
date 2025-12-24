@@ -23,20 +23,15 @@ export default function AdminHome() {
   const { logout, user } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
-  const [users, setUsers] = useState<any[]>([]);
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Tải tất cả dữ liệu cần thiết cho trang chủ admin
-  // Sử dụng Promise.all để tải song song các dữ liệu: thống kê, người dùng gần đây, và trẻ em đang học
-  // Hiển thị loading indicator trong quá trình tải và thông báo lỗi nếu có
   const load = async () => {
     try {
       setLoading(true);
       await Promise.all([
         loadStats(),
-        loadUsers(),
         loadChildren()
       ]);
     } catch (error) {
@@ -73,71 +68,11 @@ export default function AdminHome() {
     }
   };
 
-  // Tải danh sách 3 người dùng gần đây nhất từ API
-  // Sử dụng limit: 3 và page: 1 để chỉ lấy 3 người dùng đầu tiên (đã được sắp xếp theo createdAt từ backend)
-  // Nếu lỗi, đặt danh sách rỗng để tránh crash
-  const loadUsers = async () => {
-    try {
-      const response = await api.admin.users({ limit: 3, page: 1 });
-      setUsers(response.data || []);
-    } catch (error) {
-      setUsers([]);
-    }
-  };
-
-  // Tải danh sách trẻ em đang học (có hoạt động trong vòng 20 phút)
-  // Quy trình:
-  // 1. Lấy tất cả trẻ em từ API (limit: 100 để đảm bảo không bỏ sót)
-  // 2. Với mỗi trẻ, gọi API getLastActivityTime để kiểm tra hoạt động gần đây
-  // 3. Lọc những trẻ có isActive = true và startTime trong vòng 20 phút, hoặc có lastActivityTime trong vòng 20 phút
-  // 4. Sắp xếp theo thời gian hoạt động gần đây nhất (mới nhất trước)
-  // 5. Chỉ lấy 3 trẻ đầu tiên để hiển thị
   const loadChildren = async () => {
     try {
-      const response = await api.admin.children({ limit: 100, page: 1 });
-      const allChildren = response.data || [];
-      
-      const now = new Date();
-      
-      const activeChildren = await Promise.all(
-        allChildren.map(async (child: any) => {
-          try {
-            const activityResponse = await api.appSessions.getLastActivityTime(child.id || child._id);
-            const activityData = activityResponse.data || {};
-            
-            if (activityData.isActive) {
-              const lastActivityTime = new Date(activityData.lastActivityTime);
-              const diffInMinutes = (now.getTime() - lastActivityTime.getTime()) / (1000 * 60);
-              
-              if (diffInMinutes <= 20) {
-                return { ...child, lastActivityTime, isCurrentlyActive: true };
-              }
-            } else if (activityData.lastActivityTime) {
-              const lastActivityTime = new Date(activityData.lastActivityTime);
-              const diffInMinutes = (now.getTime() - lastActivityTime.getTime()) / (1000 * 60);
-              
-              if (diffInMinutes <= 20) {
-                return { ...child, lastActivityTime, isCurrentlyActive: false };
-              }
-            }
-            
-            return null;
-          } catch (error) {
-            return null;
-          }
-        })
-      );
-      
-      const filteredChildren = activeChildren
-        .filter((child): child is any => child !== null)
-        .sort((a, b) => {
-          const timeA = a.lastActivityTime ? new Date(a.lastActivityTime).getTime() : 0;
-          const timeB = b.lastActivityTime ? new Date(b.lastActivityTime).getTime() : 0;
-          return timeB - timeA;
-        })
-        .slice(0, 3);
-      
-      setChildren(filteredChildren);
+      const response = await api.admin.getActiveChildren();
+      const activeChildren = response.data || [];
+      setChildren(activeChildren);
     } catch (error: any) {
       setChildren([]);
     }
@@ -273,71 +208,65 @@ export default function AdminHome() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Người dùng gần đây</Text>
-        {users.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="people" size={40} color="#ccc" />
-            <Text style={styles.emptyStateText}>Chưa có người dùng nào</Text>
-          </View>
-        ) : (
-          <View style={styles.usersList}>
-            {users.map((user, index) => (
-              <View key={user.id || user._id || `user-${index}`} style={styles.userCard}>
-                <View style={styles.userInfo}>
-                  <View style={styles.userAvatar}>
-                    <Ionicons name="person" size={20} color="#2196F3" />
-                  </View>
-                  <View style={styles.userDetails}>
-                    <Text style={styles.userName}>{user.hoTen}</Text>
-                    <Text style={styles.userEmail}>{user.email}</Text>
-                  </View>
-                </View>
-                <View style={[styles.userStatus, { backgroundColor: user.trangThai ? '#4CAF50' : '#F44336' }]}>
-                  <Text style={styles.userStatusText}>{user.isActive ? 'Hoạt động' : 'Không hoạt động'}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Trẻ em đang học</Text>
+        <Text style={styles.sectionTitle}>Trẻ em đang học (5 học sinh gần nhất)</Text>
         {children.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="happy" size={40} color="#ccc" />
             <Text style={styles.emptyStateText}>Không có trẻ đang học</Text>
-            <Text style={[styles.emptyStateText, { fontSize: 12, marginTop: 4, color: '#999' }]}>
-              (Trẻ có hoạt động trong vòng 20 phút gần đây)
-            </Text>
           </View>
         ) : (
           <View style={styles.childrenList}>
-            {children.map((child, index) => {
-              const lastActivityTime = child.lastActivityTime ? new Date(child.lastActivityTime) : null;
-              const now = new Date();
-              const diffInMinutes = lastActivityTime 
-                ? Math.floor((now.getTime() - lastActivityTime.getTime()) / (1000 * 60))
-                : null;
+            {children.map((child: any, index: number) => {
+              const isActive = child.isActive === true;
+              const durationMinutes = child.durationMinutes || 0;
+              const durationHours = child.durationHours || Math.floor(durationMinutes / 60);
+              const remainingMinutes = child.remainingMinutes !== undefined ? child.remainingMinutes : (durationMinutes % 60);
+              
+              let durationText = '';
+              if (durationHours > 0) {
+                durationText = remainingMinutes > 0 
+                  ? `${durationHours} giờ ${remainingMinutes} phút`
+                  : `${durationHours} giờ`;
+              } else if (durationMinutes > 0) {
+                durationText = `${durationMinutes} phút`;
+              } else {
+                durationText = 'Vừa xong';
+              }
               
               return (
                 <View key={child.id || child._id || `child-${index}`} style={styles.childCard}>
                   <View style={styles.childInfo}>
-                    <View style={styles.childAvatar}>
-                      <Ionicons name="happy" size={20} color="#4CAF50" />
+                    <View style={[styles.childAvatar, { backgroundColor: isActive ? '#E8F5E9' : '#FFF3E0' }]}>
+                      <Ionicons name="happy" size={24} color={isActive ? "#4CAF50" : "#FF9800"} />
                     </View>
                     <View style={styles.childDetails}>
-                      <Text style={styles.childName}>{child.name}</Text>
-                      <Text style={styles.childParent}>{child.email}</Text>
-                      <Text style={styles.childLevel}>{child.learningLevel}</Text>
+                      <Text style={styles.childName}>{child.hoTen || child.name}</Text>
+                      <View style={styles.childMeta}>
+                        {child.phuHuynh && (
+                          <View style={styles.metaItem}>
+                            <Ionicons name="person-outline" size={12} color="#999" style={{ marginRight: 4 }} />
+                            <Text style={styles.childParent}>
+                              {child.phuHuynh.hoTen || child.phuHuynh.name}
+                            </Text>
+                          </View>
+                        )}
+                        {child.phongHoc && (
+                          <View style={styles.metaItem}>
+                            <Ionicons name="school-outline" size={12} color="#999" style={{ marginRight: 4 }} />
+                            <Text style={styles.childLevel}>{child.phongHoc}</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </View>
-                  <View style={styles.childProgress}>
-                    <Text style={[styles.childProgressText, { color: child.isCurrentlyActive ? '#4CAF50' : '#FF9800' }]}>
-                      {child.isCurrentlyActive 
-                        ? `Đang học (${diffInMinutes !== null ? diffInMinutes + ' phút' : ''})`
-                        : `Vừa học xong (${diffInMinutes !== null ? diffInMinutes + ' phút trước' : ''})`
-                      }
+                  <View style={styles.childStatus}>
+                    <View style={[styles.statusBadge, { backgroundColor: isActive ? '#E8F5E9' : '#FFF3E0' }]}>
+                      <Text style={[styles.statusText, { color: isActive ? '#4CAF50' : '#FF9800' }]}>
+                        {isActive ? 'Đang học' : 'Vừa học xong'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.timeText, { color: '#666' }]}>
+                      {durationText} {isActive ? '' : 'trước'}
                     </Text>
                   </View>
                 </View>
@@ -561,7 +490,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
@@ -571,40 +501,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   childAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E8F5E8',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   childDetails: {
     flex: 1,
   },
   childName: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 6,
+  },
+  childMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
   },
   childParent: {
     fontSize: 12,
     color: '#666',
-    marginTop: 2,
-  },
-  childProgress: {
-    alignItems: 'flex-end',
-  },
-  childProgressText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginBottom: 4,
   },
   childLevel: {
-    fontSize: 10,
+    fontSize: 12,
+    color: '#666',
+  },
+  childStatus: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  timeText: {
+    fontSize: 11,
     color: '#999',
-    marginTop: 2,
   },
   emptyState: {
     alignItems: 'center',

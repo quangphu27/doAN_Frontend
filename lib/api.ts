@@ -92,6 +92,7 @@ export const api = {
 		stats: () => request('/admin/stats'),
 		users: (params?: any) => request(`/admin/users${params ? '?' + new URLSearchParams(params).toString() : ''}`),
 		children: (params?: any) => request(`/admin/children${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+		getActiveChildren: () => request('/admin/active-children'),
 		reports: (params?: any) => request(`/admin/reports${params ? '?' + new URLSearchParams(params).toString() : ''}`),
 		trialAccounts: (params?: any) => request(`/admin/trial-accounts${params ? '?' + new URLSearchParams(params).toString() : ''}`),
 		trialStats: () => request('/admin/trial-stats'),

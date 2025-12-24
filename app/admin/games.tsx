@@ -48,30 +48,69 @@ export default function GameManagement() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
-  const [selectedType, setSelectedType] = useState<string>('all');
   const [searchText, setSearchText] = useState('');
   const [createGameVisible, setCreateGameVisible] = useState(false);
   const [gameTypeSelectionVisible, setGameTypeSelectionVisible] = useState(false);
   const [selectedGameType, setSelectedGameType] = useState<'coloring' | 'puzzle' | 'guessing' | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalGames, setTotalGames] = useState(0);
+  const [loadingGameDetail, setLoadingGameDetail] = useState(false);
+
+  useEffect(() => {
+    setPage(1);
+    loadGames();
+  }, [searchText]);
 
   useEffect(() => {
     loadGames();
-  }, [selectedType, searchText]);
+  }, [page]);
 
-  // Tải danh sách trò chơi từ API với các bộ lọc
-  // Nếu selectedType !== 'all': thêm filter theo loại trò chơi (coloring, puzzle, guess_action)
-  // Nếu có searchText: thêm filter tìm kiếm theo tên trò chơi
-  // Giới hạn 20 trò chơi mỗi trang
-  // Hiển thị loading indicator và thông báo lỗi nếu có
+  
   const loadGames = async () => {
     try {
       setLoading(true);
-      const params: any = { limit: 20 };
-      if (selectedType !== 'all') params.type = selectedType;
+      const params: any = { page, limit: 20 };
       if (searchText) params.search = searchText;
 
       const response = await api.games.list(params);
-      setGames(response.data.games || []);
+      const gamesData = (response.data.games || []).map((game: any) => {
+        let className = '';
+        let teacherName = '';
+        
+        if (game.lop) {
+          if (Array.isArray(game.lop) && game.lop.length > 0) {
+            const firstClass = game.lop[0];
+            className = firstClass.tenLop || firstClass.name || '';
+            if (firstClass.giaoVien) {
+              teacherName = firstClass.giaoVien.hoTen || firstClass.giaoVien.name || '';
+            }
+          } else if (typeof game.lop === 'object') {
+            className = game.lop.tenLop || game.lop.name || '';
+            if (game.lop.giaoVien) {
+              teacherName = game.lop.giaoVien.hoTen || game.lop.giaoVien.name || '';
+            }
+          }
+        }
+
+        return {
+          ...game,
+          id: game.id || game._id,
+          title: game.title || game.tieuDe || '',
+          type: game.type || game.loai || 'coloring',
+          description: game.description || game.moTa || '',
+          level: game.level || game.capDo || 'beginner',
+          category: game.category || game.danhMuc || 'letter',
+          imageUrl: game.imageUrl || game.anhDaiDien,
+          estimatedTime: game.estimatedTime || game.thoiGianUocTinh || 5,
+          data: game.data || game.noiDung || {},
+          className: className,
+          teacherName: teacherName
+        };
+      });
+      setGames(gamesData);
+      setTotalPages(response.data.pagination?.pages || 1);
+      setTotalGames(response.data.pagination?.total || 0);
     } catch (error) {
       Alert.alert('Lỗi', 'Không thể tải danh sách trò chơi');
     } finally {
@@ -79,27 +118,47 @@ export default function GameManagement() {
     }
   };
 
-  // Làm mới danh sách trò chơi khi người dùng kéo xuống
-  // Đặt refreshing = true để hiển thị loading indicator
-  // Gọi lại loadGames() để tải lại dữ liệu
-  // Sau khi hoàn thành, đặt refreshing = false
   const onRefresh = async () => {
     setRefreshing(true);
+    setPage(1);
     await loadGames();
     setRefreshing(false);
   };
 
-  // Mở modal để chỉnh sửa trò chơi
-  // Lưu trò chơi cần chỉnh sửa vào editingGame để load dữ liệu vào form
-  // Hiển thị GameModal với dữ liệu đã điền sẵn
-  const handleEditGame = (game: Game) => {
-    setEditingGame(game);
-    setModalVisible(true);
+  const handleEditGame = async (game: Game) => {
+    try {
+      setLoadingGameDetail(true);
+      const gameId = game.id || (game as any)._id;
+      const response = await api.games.get(gameId);
+      const gameData = response.data?.game || response.data;
+      if (!gameData) {
+        throw new Error('Không tìm thấy dữ liệu trò chơi');
+      }
+      
+      const normalized: Game = {
+        id: (gameData as any).id || (gameData as any)._id || gameId,
+        key: (gameData as any).key || (gameData as any)._id || gameId,
+        title: gameData.tieuDe || gameData.title || '',
+        type: (gameData.loai || gameData.type || 'coloring') as any,
+        category: (gameData.danhMuc || gameData.category || 'letter') as any,
+        level: (gameData.capDo || gameData.level || 'beginner') as any,
+        description: gameData.moTa || gameData.description || '',
+        imageUrl: gameData.anhDaiDien || gameData.imageUrl || 
+                  (gameData.data?.coloringData?.outlineImage) || 
+                  (gameData.data?.imageUrl) || undefined,
+        estimatedTime: gameData.thoiGianUocTinh || gameData.estimatedTime || 5,
+        data: gameData.noiDung || gameData.data || {},
+      };
+      
+      setEditingGame(normalized);
+      setModalVisible(true);
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể tải trò chơi');
+    } finally {
+      setLoadingGameDetail(false);
+    }
   };
 
-  // Xóa trò chơi khỏi hệ thống
-  // Hiển thị Alert xác nhận trước khi xóa
-  // Nếu người dùng xác nhận: gọi API delete, refresh danh sách, và hiển thị thông báo thành công
   const handleDeleteGame = (gameId: string) => {
     Alert.alert(
       'Xác nhận xóa',
@@ -123,44 +182,27 @@ export default function GameManagement() {
     );
   };
 
-  // Admin chỉ xem danh sách, không tạo mới
-  // const handleCreateGame = () => {
-  //   setGameTypeSelectionVisible(true);
-  // };
-
-  // Xử lý khi người dùng chọn loại trò chơi
-  // Lưu loại trò chơi đã chọn vào selectedGameType
-  // Đóng GameTypeSelection modal và mở CreateGame modal với loại trò chơi đã chọn
   const handleSelectGameType = (gameType: 'coloring' | 'puzzle' | 'guessing') => {
     setSelectedGameType(gameType);
     setGameTypeSelectionVisible(false);
     setCreateGameVisible(true);
   };
 
-  // Xử lý sau khi tạo trò chơi thành công
-  // Đóng CreateGame modal, reset selectedGameType về null
-  // Refresh danh sách trò chơi để hiển thị trò chơi mới
   const handleCreateGameSuccess = () => {
     setCreateGameVisible(false);
     setSelectedGameType(null);
     loadGames();
   };
 
-  // Đóng modal tạo trò chơi khi người dùng hủy
-  // Đóng CreateGame modal và reset selectedGameType về null
   const handleCreateGameClose = () => {
     setCreateGameVisible(false);
     setSelectedGameType(null);
   };
 
-  // Đóng modal chọn loại trò chơi
-  // Ẩn GameTypeSelection modal
   const handleGameTypeSelectionClose = () => {
     setGameTypeSelectionVisible(false);
   };
 
-  // Lấy màu sắc tương ứng với loại trò chơi
-  // Coloring: xanh ngọc, Puzzle: đỏ, Guess action: cam, các loại khác: xám
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'coloring': return '#4ECDC4';
@@ -172,8 +214,6 @@ export default function GameManagement() {
     }
   };
 
-  // Lấy icon tương ứng với loại trò chơi
-  // Coloring: color-palette, Puzzle: grid, Matching: link, Guess action: walk, các loại khác: game-controller
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'coloring': return 'color-palette';
@@ -185,8 +225,6 @@ export default function GameManagement() {
     }
   };
 
-  // Lấy tên hiển thị tiếng Việt tương ứng với loại trò chơi
-  // Coloring: "Tô màu", Puzzle: "Xếp hình", Matching: "Ghép nối", Guess action: "Đoán hành động", các loại khác: "Trò chơi"
   const getTypeName = (type: string) => {
     switch (type) {
       case 'coloring': return 'Tô màu';
@@ -221,36 +259,11 @@ export default function GameManagement() {
           <Ionicons name="search" size={20} color="#666" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm trò chơi..."
+            placeholder="Tìm kiếm theo tên trò chơi hoặc tên lớp..."
             value={searchText}
             onChangeText={setSearchText}
           />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-          {['all', 'coloring', 'puzzle', 'guess_action'].map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[
-                styles.filterButton,
-                selectedType === type && styles.filterButtonActive,
-                { backgroundColor: selectedType === type ? getTypeColor(type) : '#f5f5f5' }
-              ]}
-              onPress={() => setSelectedType(type)}
-            >
-              <Ionicons 
-                name={getTypeIcon(type) as any} 
-                size={16} 
-                color={selectedType === type ? '#fff' : '#666'} 
-              />
-              <Text style={[
-                styles.filterButtonText,
-                selectedType === type && styles.filterButtonTextActive
-              ]}>
-                {type === 'all' ? 'Tất cả' : getTypeName(type)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
 
       {/* Admin chỉ xem danh sách, không tạo mới */}
@@ -261,45 +274,111 @@ export default function GameManagement() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {games.map((game) => (
-          <View key={game.id || (game as any)._id} style={styles.gameCard}>
-            <View style={styles.gameInfo}>
-              <View style={[styles.typeBadge, { backgroundColor: getTypeColor(game.type) }]}>
-                <Ionicons name={getTypeIcon(game.type) as any} size={20} color="#fff" />
-              </View>
-              <View style={styles.gameDetails}>
-                <Text style={styles.gameTitle}>{game.title}</Text>
-                <Text style={styles.gameType}>{getTypeName(game.type)}</Text>
-                {game.description && (
-                  <Text style={styles.gameDescription} numberOfLines={2}>
-                    {game.description}
-                  </Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.gameActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleEditGame(game)}
-              >
-                <Ionicons name="create" size={20} color="#2196F3" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleDeleteGame(game.id || (game as any)._id)}
-              >
-                <Ionicons name="trash" size={20} color="#F44336" />
-              </TouchableOpacity>
-            </View>
+        {loadingGameDetail && (
+          <View style={styles.inlineLoading}>
+            <ActivityIndicator size="small" color="#FF6B6B" />
+            <Text style={styles.inlineLoadingText}>Đang tải trò chơi...</Text>
           </View>
-        ))}
+        )}
+        {games.length === 0 && !loading ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Không có trò chơi nào</Text>
+          </View>
+        ) : (
+          games.map((game) => {
+            const gameData = game as any;
+            return (
+              <View key={game.id || gameData._id} style={styles.gameCard}>
+                <View style={styles.gameInfo}>
+                  <View style={[styles.typeBadge, { backgroundColor: getTypeColor(game.type) }]}>
+                    <Ionicons name={getTypeIcon(game.type) as any} size={20} color="#fff" />
+                  </View>
+                  <View style={styles.gameDetails}>
+                    <Text style={styles.gameTitle}>{game.title}</Text>
+                    <Text style={styles.gameType}>{getTypeName(game.type)}</Text>
+                    {game.description && (
+                      <Text style={styles.gameDescription} numberOfLines={2}>
+                        {game.description}
+                      </Text>
+                    )}
+                    {gameData.className && (
+                      <View style={styles.classInfo}>
+                        <Ionicons name="school" size={14} color="#666" />
+                        <Text style={styles.classText}>Lớp: {gameData.className}</Text>
+                      </View>
+                    )}
+                    {gameData.teacherName && (
+                      <View style={styles.classInfo}>
+                        <Ionicons name="person" size={14} color="#666" />
+                        <Text style={styles.classText}>GVCN: {gameData.teacherName}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.gameActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleEditGame(game)}
+                    disabled={loadingGameDetail}
+                  >
+                    <Ionicons name="create" size={20} color="#2196F3" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleDeleteGame(game.id || gameData._id)}
+                  >
+                    <Ionicons name="trash" size={20} color="#F44336" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
+        )}
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <View style={styles.paginationContainer}>
+            <TouchableOpacity
+              style={[styles.paginationButton, page === 1 && styles.paginationButtonDisabled]}
+              onPress={() => {
+                if (page > 1) {
+                  setPage(page - 1);
+                }
+              }}
+              disabled={page === 1}
+            >
+              <Ionicons name="chevron-back" size={20} color={page === 1 ? "#ccc" : "#FF6B6B"} />
+            </TouchableOpacity>
+            <Text style={styles.paginationText}>
+              Trang {page} / {totalPages} ({totalGames} trò chơi)
+            </Text>
+            <TouchableOpacity
+              style={[styles.paginationButton, page === totalPages && styles.paginationButtonDisabled]}
+              onPress={() => {
+                if (page < totalPages) {
+                  setPage(page + 1);
+                }
+              }}
+              disabled={page === totalPages}
+            >
+              <Ionicons name="chevron-forward" size={20} color={page === totalPages ? "#ccc" : "#FF6B6B"} />
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       <GameModal
         visible={modalVisible}
         game={editingGame}
-        onClose={() => setModalVisible(false)}
-        onSave={loadGames}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingGame(null);
+        }}
+        onSave={() => {
+          setModalVisible(false);
+          setEditingGame(null);
+          loadGames();
+        }}
       />
 
       <GameTypeSelection
@@ -330,7 +409,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
   const [newImageUri, setNewImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   
-  // State cho puzzle rows/cols
   const [puzzleRows, setPuzzleRows] = useState<number>(3);
   const [puzzleCols, setPuzzleCols] = useState<number>(3);
   
@@ -355,18 +433,14 @@ export function GameModal({ visible, game, onClose, onSave }: {
       
       let imageToShow: string | null = null;
       
-      // Xử lý cho game Puzzle - lấy originalImage từ data
       if (game.type === 'puzzle' && game.data?.originalImage) {
         imageToShow = getFullImageUrl(game.data.originalImage) || null;
-        // Load rows/cols từ data
         setPuzzleRows(game.data.rows || 3);
         setPuzzleCols(game.data.cols || 3);
       } else if (game.type === 'puzzle') {
-        // Reset về mặc định nếu không có data
         setPuzzleRows(3);
         setPuzzleCols(3);
       } 
-      // Xử lý cho game Coloring - lấy imageUrl hoặc outlineImage từ coloringData
       else if (game.type === 'coloring') {
         if (game.imageUrl) {
           imageToShow = getFullImageUrl(game.imageUrl) || null;
@@ -374,14 +448,11 @@ export function GameModal({ visible, game, onClose, onSave }: {
           imageToShow = getFullImageUrl(game.data.coloringData.outlineImage) || null;
         }
       }
-      // Xử lý cho game Guessing - lấy thumbnail và questions
       else if (game.type === 'guess_action' || game.type === 'guessing') {
-        // Lấy thumbnail (có thể là ảnh hoặc video/GIF)
         if (game.imageUrl) {
           imageToShow = getFullImageUrl(game.imageUrl) || null;
         }
         
-        // Load questions
         if (game.data?.questions && Array.isArray(game.data.questions) && game.data.questions.length > 0) {
           const loadedQuestions = game.data.questions.map((q: any) => ({
             id: q.id || `question_${Date.now()}_${Math.random()}`,
@@ -398,7 +469,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
           setGuessingQuestions(loadedQuestions);
           setSelectedMediaUris(new Array(loadedQuestions.length).fill(null));
         } else {
-          // Nếu không có questions, tạo một câu hỏi mặc định
           setGuessingQuestions([{
             options: ['', '', '', ''],
             correctAnswer: '',
@@ -407,7 +477,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
           setSelectedMediaUris([null]);
         }
       } 
-      // Xử lý cho các game khác - lấy imageUrl
       else if (game.imageUrl) {
         imageToShow = getFullImageUrl(game.imageUrl) || null;
       }
@@ -434,14 +503,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     }
   }, [game]);
 
-  // Chọn ảnh/video mới cho trò chơi (thumbnail hoặc ảnh chính)
-  // Quy trình:
-  // 1. Kiểm tra quyền truy cập thư viện ảnh/video, nếu không có thì yêu cầu và hiển thị thông báo
-  // 2. Xác định loại media được phép chọn dựa trên loại trò chơi:
-  //    - Puzzle/Coloring: chỉ cho phép chọn ảnh (Images), cho phép chỉnh sửa, tỷ lệ 1:1
-  //    - Guess action: cho phép chọn tất cả (ảnh/video/GIF), không cho phép chỉnh sửa, không giới hạn tỷ lệ
-  // 3. Mở ImagePicker để người dùng chọn file
-  // 4. Lưu URI của file đã chọn vào newImageUri để hiển thị preview và upload sau này
   const pickImage = async () => {
     try {
       if (!game) return;
@@ -482,12 +543,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     }
   };
 
-  // Chọn ảnh/video/GIF cho một câu hỏi cụ thể trong game Đoán hành động
-  // Quy trình:
-  // 1. Kiểm tra quyền truy cập thư viện, nếu không có thì yêu cầu
-  // 2. Mở ImagePicker cho phép chọn tất cả loại media (ảnh/video/GIF)
-  // 3. Lưu URI của file đã chọn vào selectedMediaUris tại vị trí questionIndex
-  // 4. File này sẽ được upload khi lưu trò chơi và thay thế media cũ của câu hỏi
   const handleMediaPickerForQuestion = async (questionIndex: number) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -513,9 +568,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     }
   };
 
-  // Thêm câu hỏi mới vào danh sách câu hỏi của game Đoán hành động
-  // Tạo câu hỏi mới với: 4 options rỗng, correctAnswer rỗng, explanation rỗng
-  // Thêm null vào selectedMediaUris để đánh dấu chưa có media mới cho câu hỏi này
   const addGuessingQuestion = () => {
     setGuessingQuestions(prev => [...prev, {
       options: ['', '', '', ''],
@@ -525,9 +577,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     setSelectedMediaUris(prev => [...prev, null]);
   };
 
-  // Xóa câu hỏi khỏi danh sách
-  // Kiểm tra: phải có ít nhất 1 câu hỏi (không cho phép xóa hết)
-  // Nếu hợp lệ: xóa câu hỏi tại index và xóa media URI tương ứng
   const removeGuessingQuestion = (index: number) => {
     if (guessingQuestions.length > 1) {
       setGuessingQuestions(prev => prev.filter((_, i) => i !== index));
@@ -537,18 +586,12 @@ export function GameModal({ visible, game, onClose, onSave }: {
     }
   };
 
-  // Cập nhật một trường cụ thể của câu hỏi (options, correctAnswer, hoặc explanation)
-  // Tìm câu hỏi tại index và cập nhật field tương ứng với value mới
-  // Giữ nguyên các câu hỏi khác
   const updateGuessingQuestion = (index: number, field: 'options' | 'correctAnswer' | 'explanation', value: any) => {
     setGuessingQuestions(prev => prev.map((q, i) => 
       i === index ? { ...q, [field]: value } : q
     ));
   };
 
-  // Cập nhật một option cụ thể trong danh sách options của câu hỏi
-  // Tìm câu hỏi tại questionIndex, tìm option tại optionIndex và thay thế bằng value mới
-  // Giữ nguyên các option khác
   const updateGuessingOption = (questionIndex: number, optionIndex: number, value: string) => {
     setGuessingQuestions(prev => prev.map((q, i) => 
       i === questionIndex ? {
@@ -558,14 +601,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     ));
   };
 
-  // Upload ảnh cho game Puzzle (xếp hình)
-  // Quy trình:
-  // 1. Kiểm tra URI hợp lệ (phải bắt đầu bằng file://, http://, hoặc https://)
-  // 2. Xác định MIME type và tên file dựa trên extension (.png, .jpg, .gif, .jpeg)
-  // 3. Tạo FormData với: image file, rows=3, cols=3 (để cắt thành 9 mảnh)
-  // 4. Gọi API uploadPuzzle để upload và xử lý ảnh (cắt thành các mảnh puzzle)
-  // 5. Xử lý lỗi: kiểm tra network error, parse JSON error response, hoặc hiển thị error message từ server
-  // 6. Trả về data chứa originalImage và danh sách pieces đã được cắt
   const uploadImage = async (uri: string) => {
     setUploading(true);
     try {
@@ -647,13 +682,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     }
   };
 
-  // Upload media (ảnh/video/GIF) cho các loại game khác
-  // Quy trình:
-  // 1. Kiểm tra URI hợp lệ
-  // 2. Xác định MIME type dựa trên extension (.mp4, .mov, .gif, .png, .jpg, .jpeg)
-  // 3. Nếu gameType là guess_action/guessing/coloring: sử dụng uploadGuess (chỉ upload file, không xử lý)
-  // 4. Nếu gameType khác: sử dụng uploadPuzzle (cắt thành pieces)
-  // 5. Xử lý lỗi và trả về filename hoặc data tương ứng
   const uploadMedia = async (uri: string, gameType: string) => {
     setUploading(true);
     try {
@@ -778,24 +806,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
     }
   };
 
-  // Lưu trò chơi (chỉ hỗ trợ cập nhật, không hỗ trợ tạo mới từ form này)
-  // Quy trình:
-  // 1. Kiểm tra game tồn tại, nếu không thì báo lỗi
-  // 2. Tạo gameData từ formData (title, level, description, estimatedTime)
-  // 3. Nếu có ảnh/video mới (newImageUri):
-  //    - Puzzle: upload và cắt thành pieces, cập nhật originalImage và pieces
-  //    - Coloring: upload ảnh trực tiếp, cập nhật imageUrl và outlineImage trong coloringData
-  //    - Guess action: upload thumbnail, cập nhật imageUrl
-  //    - Guess image/number: upload ảnh, cập nhật imageUrl trong data
-  // 4. Nếu không có ảnh mới: giữ nguyên data hiện tại
-  // 5. Với game Đoán hành động:
-  //    - Validate: phải có ít nhất 1 câu hỏi, mỗi câu hỏi phải có đủ 4 options và correctAnswer hợp lệ
-  //    - Upload media mới cho các câu hỏi có selectedMediaUris (xác định mediaType từ extension)
-  //    - Cập nhật danh sách questions với media mới
-  //    - Nếu chưa có thumbnail: dùng media của câu hỏi đầu tiên làm thumbnail
-  // 6. Chuẩn hóa originalImage path (loại bỏ domain, chỉ giữ filename)
-  // 7. Gọi API update để lưu trò chơi
-  // 8. Xử lý lỗi và hiển thị thông báo thành công/thất bại
   const handleSave = async () => {
     try {
       if (!game) {
@@ -805,10 +815,8 @@ export function GameModal({ visible, game, onClose, onSave }: {
 
       let gameData: any = { ...formData };
       
-      // Xử lý Puzzle
       if (game.type === 'puzzle') {
         if (newImageUri) {
-          // Có ảnh mới, upload với rows/cols mới
           const uploadResult = await uploadImage(newImageUri);
           gameData.data = {
             ...(game.data || {}),
@@ -818,24 +826,19 @@ export function GameModal({ visible, game, onClose, onSave }: {
             cols: puzzleCols
           };
         } else {
-          // Không có ảnh mới
           const rowsChanged = game.data?.rows !== puzzleRows;
           const colsChanged = game.data?.cols !== puzzleCols;
           
           if (rowsChanged || colsChanged) {
-            // Nếu thay đổi rows/cols, cần upload lại ảnh cũ
             const originalImageUrl = game.data?.originalImage;
             if (originalImageUrl) {
               const fullImageUrl = getFullImageUrl(originalImageUrl);
               if (fullImageUrl && (fullImageUrl.startsWith('http://') || fullImageUrl.startsWith('https://'))) {
-                // Nếu là URL từ server, cần download về trước (phức tạp)
-                // Tạm thời chỉ cập nhật rows/cols, backend sẽ xử lý
                 Alert.alert(
                   'Lưu ý', 
                   'Đã thay đổi số mảnh ghép. Vui lòng upload lại ảnh để áp dụng thay đổi, hoặc backend sẽ tự động cắt lại ảnh.'
                 );
               }
-              // Upload lại ảnh cũ với rows/cols mới
               try {
                 const uploadResult = await uploadImage(fullImageUrl || originalImageUrl);
                 gameData.data = {
@@ -846,7 +849,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
                   cols: puzzleCols
                 };
               } catch (error) {
-                // Nếu không upload được (ví dụ URL không hợp lệ), chỉ cập nhật rows/cols
                 gameData.data = {
                   ...(game.data || {}),
                   rows: puzzleRows,
@@ -854,7 +856,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
                 };
               }
             } else {
-              // Không có ảnh, chỉ cập nhật rows/cols
               gameData.data = {
                 ...(game.data || {}),
                 rows: puzzleRows,
@@ -862,7 +863,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
               };
             }
           } else {
-            // Không thay đổi gì, giữ nguyên
             gameData.data = game.data || {};
           }
         }
@@ -900,9 +900,7 @@ export function GameModal({ visible, game, onClose, onSave }: {
           };
         }
       } else {
-        // Với các game khác (không phải puzzle), giữ nguyên data
         if (game.data) {
-          // Puzzle đã được xử lý ở trên, chỉ xử lý các game khác
           if (game.type === 'coloring' || game.type === 'guess_action' || game.type === 'guessing' || 
               game.type === 'matching' || game.type === 'memory' || game.type === 'quiz' ||
               game.type === 'guess_image' || game.type === 'guess_number') {
@@ -1199,11 +1197,9 @@ export function GameModal({ visible, game, onClose, onSave }: {
                   const mediaUri = selectedMediaUris[qIndex] || (question.mediaUrl ? getFullImageUrl(question.mediaUrl) : null);
                   const hasNewMedia = !!selectedMediaUris[qIndex];
                   
-                  // Xác định mediaType
                   let mediaType = question.mediaType || 'image';
                   if (mediaUri) {
                     if (hasNewMedia) {
-                      // Nếu có media mới, xác định từ URI
                       const uri = mediaUri.toLowerCase();
                       if (uri.endsWith('.mp4') || uri.endsWith('.mov')) {
                         mediaType = 'video';
@@ -1213,7 +1209,6 @@ export function GameModal({ visible, game, onClose, onSave }: {
                         mediaType = 'image';
                       }
                     } else if (question.mediaUrl) {
-                      // Nếu không có media mới, xác định từ URL cũ
                       const url = question.mediaUrl.toLowerCase();
                       if (url.endsWith('.mp4') || url.endsWith('.mov')) {
                         mediaType = 'video';
@@ -1517,6 +1512,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 16,
   },
+  filtersSection: {
+    marginBottom: 15,
+  },
+  filterSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
   filterContainer: {
     flexDirection: 'row',
     gap: 10,
@@ -1591,6 +1595,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
+  },
+  classInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  classText: {
+    fontSize: 12,
+    color: '#666',
   },
   gameActions: {
     flexDirection: 'row',
@@ -2136,6 +2150,51 @@ const styles = StyleSheet.create({
   gifBadgeText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  inlineLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+  },
+  inlineLoadingText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 16,
+  },
+  paginationButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+    borderColor: '#ccc',
+  },
+  paginationText: {
+    fontSize: 14,
+    color: '#666',
     fontWeight: '600',
   },
 });

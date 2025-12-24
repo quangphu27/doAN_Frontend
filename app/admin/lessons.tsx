@@ -68,34 +68,65 @@ export default function LessonManagement() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLessons, setTotalLessons] = useState(0);
 
   useEffect(() => {
+    setPage(1);
     loadLessons();
   }, [searchText]);
 
-  // Tải danh sách bài học với tìm kiếm
+  useEffect(() => {
+    loadLessons();
+  }, [page]);
+
   const loadLessons = async () => {
     try {
       setLoading(true);
-      const params: any = { limit: 20 };
+      const params: any = { page, limit: 20 };
       if (searchText) params.search = searchText;
 
       const response = await api.lessons.list(params);
-      const lessonsData = (response.data.lessons || []).map((lesson: any) => ({
-        ...lesson,
-        id: lesson.id || lesson._id,
-        title: lesson.title || lesson.tieuDe,
-        description: lesson.description || lesson.moTa,
-        category: lesson.category || lesson.danhMuc,
-        level: lesson.level || lesson.capDo,
-        imageUrl: lesson.imageUrl || lesson.anhDaiDien,
-        estimatedTime: lesson.estimatedTime || lesson.thoiGianUocTinh,
-        order: lesson.order || lesson.thuTu,
-        content: lesson.content || {
-          exercises: lesson.noiDung?.baiTap || []
+      const lessonsData = (response.data.lessons || []).map((lesson: any) => {
+        let className = '';
+        let teacherName = '';
+        
+        if (lesson.lop) {
+          if (Array.isArray(lesson.lop) && lesson.lop.length > 0) {
+            const firstClass = lesson.lop[0];
+            className = firstClass.tenLop || firstClass.name || '';
+            if (firstClass.giaoVien) {
+              teacherName = firstClass.giaoVien.hoTen || firstClass.giaoVien.name || '';
+            }
+          } else if (typeof lesson.lop === 'object') {
+            className = lesson.lop.tenLop || lesson.lop.name || '';
+            if (lesson.lop.giaoVien) {
+              teacherName = lesson.lop.giaoVien.hoTen || lesson.lop.giaoVien.name || '';
+            }
+          }
         }
-      }));
+
+        return {
+          ...lesson,
+          id: lesson.id || lesson._id,
+          title: lesson.title || lesson.tieuDe,
+          description: lesson.description || lesson.moTa,
+          category: lesson.category || lesson.danhMuc,
+          level: lesson.level || lesson.capDo,
+          imageUrl: lesson.imageUrl || lesson.anhDaiDien,
+          estimatedTime: lesson.estimatedTime || lesson.thoiGianUocTinh,
+          order: lesson.order || lesson.thuTu,
+          content: lesson.content || {
+            exercises: lesson.noiDung?.baiTap || []
+          },
+          className: className,
+          teacherName: teacherName
+        };
+      });
       setLessons(lessonsData);
+      setTotalPages(response.data.pagination?.pages || 1);
+      setTotalLessons(response.data.pagination?.total || 0);
     } catch (error) {
       console.error('Error loading lessons:', error);
       Alert.alert('Lỗi', 'Không thể tải danh sách bài học');
@@ -104,26 +135,18 @@ export default function LessonManagement() {
     }
   };
 
-  // Làm mới danh sách bài học khi kéo xuống
   const onRefresh = async () => {
     setRefreshing(true);
+    setPage(1);
     await loadLessons();
     setRefreshing(false);
   };
 
-  // Admin chỉ xem danh sách, không tạo mới
-  // const handleAddLesson = () => {
-  //   setEditingLesson(null);
-  //   setModalVisible(true);
-  // };
-
-  // Mở modal để chỉnh sửa bài học
   const handleEditLesson = (lesson: Lesson) => {
     setEditingLesson(lesson);
     setModalVisible(true);
   };
 
-  // Xóa bài học
   const handleDeleteLesson = (lessonId: string) => {
     Alert.alert(
       'Xác nhận xóa',
@@ -185,57 +208,109 @@ export default function LessonManagement() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {lessons.map((lesson) => {
-          const lessonData = lesson as any;
-          const title = lesson.title || lessonData.tieuDe || '';
-          const description = lesson.description || lessonData.moTa || '';
-          const exercises = lesson.content?.exercises || lessonData.noiDung?.baiTap || [];
-          const exerciseCount = Array.isArray(exercises) ? exercises.length : 0;
-          
-          return (
-            <View key={lesson.id || lessonData._id} style={styles.lessonCard}>
-              <View style={styles.lessonInfo}>
-                <View style={styles.lessonDetails}>
-                  <Text style={styles.lessonTitle}>{title}</Text>
-                  {description && (
-                    <Text style={styles.lessonDescription} numberOfLines={2}>
-                      {description}
+        {lessons.length === 0 && !loading ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Không có bài học nào</Text>
+          </View>
+        ) : (
+          lessons.map((lesson) => {
+            const lessonData = lesson as any;
+            const title = lesson.title || lessonData.tieuDe || '';
+            const description = lesson.description || lessonData.moTa || '';
+            const exercises = lesson.content?.exercises || lessonData.noiDung?.baiTap || [];
+            const exerciseCount = Array.isArray(exercises) ? exercises.length : 0;
+            
+            return (
+              <View key={lesson.id || lessonData._id} style={styles.lessonCard}>
+                <View style={styles.lessonInfo}>
+                  <View style={styles.lessonDetails}>
+                    <Text style={styles.lessonTitle}>{title}</Text>
+                    {description && (
+                      <Text style={styles.lessonDescription} numberOfLines={2}>
+                        {description}
+                      </Text>
+                    )}
+                    <Text style={styles.exerciseCount}>
+                      {exerciseCount} bài tập
                     </Text>
-                  )}
-                  <Text style={styles.exerciseCount}>
-                    {exerciseCount} bài tập
-                  </Text>
-                  {((lesson as any).lop && ((lesson as any).lop.length > 0 || (lesson as any).lop.tenLop)) && (
-                    <Text style={styles.lessonClass}>
-                      <Ionicons name="school" size={12} color="#666" /> {
-                        Array.isArray((lesson as any).lop) 
-                          ? (lesson as any).lop[0]?.tenLop || (lesson as any).lop[0]?.name || ''
-                          : (lesson as any).lop?.tenLop || (lesson as any).lop?.name || ''
-                      }
-                    </Text>
-                  )}
+                    {lessonData.className && (
+                      <View style={styles.classInfo}>
+                        <Ionicons name="school" size={14} color="#666" />
+                        <Text style={styles.classText}>Lớp: {lessonData.className}</Text>
+                      </View>
+                    )}
+                    {lessonData.teacherName && (
+                      <View style={styles.classInfo}>
+                        <Ionicons name="person" size={14} color="#666" />
+                        <Text style={styles.classText}>GVCN: {lessonData.teacherName}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.lessonActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleEditLesson(lesson)}
+                  >
+                    <Ionicons name="create" size={20} color="#2196F3" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleDeleteLesson(lesson.id || lessonData._id)}
+                  >
+                    <Ionicons name="trash" size={20} color="#F44336" />
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.lessonActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleEditLesson(lesson)}
-                >
-                  <Ionicons name="create" size={20} color="#2196F3" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleDeleteLesson(lesson.id || lessonData._id)}
-                >
-                  <Ionicons name="trash" size={20} color="#F44336" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
+            );
+          })
+        )}
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <View style={styles.paginationContainer}>
+            <TouchableOpacity
+              style={[styles.paginationButton, page === 1 && styles.paginationButtonDisabled]}
+              onPress={() => {
+                if (page > 1) {
+                  setPage(page - 1);
+                }
+              }}
+              disabled={page === 1}
+            >
+              <Ionicons name="chevron-back" size={20} color={page === 1 ? "#ccc" : "#4CAF50"} />
+            </TouchableOpacity>
+            <Text style={styles.paginationText}>
+              Trang {page} / {totalPages} ({totalLessons} bài học)
+            </Text>
+            <TouchableOpacity
+              style={[styles.paginationButton, page === totalPages && styles.paginationButtonDisabled]}
+              onPress={() => {
+                if (page < totalPages) {
+                  setPage(page + 1);
+                }
+              }}
+              disabled={page === totalPages}
+            >
+              <Ionicons name="chevron-forward" size={20} color={page === totalPages ? "#ccc" : "#4CAF50"} />
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Admin chỉ xem danh sách, không tạo/sửa */}
+      <LessonModal
+        visible={modalVisible}
+        lesson={editingLesson}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingLesson(null);
+        }}
+        onSave={() => {
+          setModalVisible(false);
+          setEditingLesson(null);
+          loadLessons();
+        }}
+      />
     </View>
   );
 }
@@ -246,7 +321,6 @@ function LessonModal({ visible, lesson, onClose, onSave }: {
   onClose: () => void;
   onSave: () => void;
 }) {
-  // Helper function to map exercise type
   const mapExerciseType = (type: string): 'multiple_choice' | 'fill_blank' | 'drag_drop' | 'matching' | 'coloring' => {
     const typeMap: Record<string, 'multiple_choice' | 'fill_blank' | 'drag_drop' | 'matching' | 'coloring'> = {
       'tracNghiem': 'multiple_choice',
@@ -263,7 +337,6 @@ function LessonModal({ visible, lesson, onClose, onSave }: {
     return typeMap[type] || 'multiple_choice';
   };
 
-  // Helper function to map exercise type to Vietnamese
   const mapExerciseTypeToVietnamese = (type: string): string => {
     const typeMap: Record<string, string> = {
       'multiple_choice': 'tracNghiem',
@@ -323,33 +396,20 @@ function LessonModal({ visible, lesson, onClose, onSave }: {
     }
   }, [lesson]);
 
-  // Mở modal để thêm bài tập mới
-  // Đặt currentExercise = null để báo hiệu đây là thao tác thêm mới (không phải chỉnh sửa)
-  // Hiển thị ExerciseModal để người dùng nhập thông tin bài tập
   const handleAddExercise = () => {
     setCurrentExercise(null);
     setExerciseModalVisible(true);
   };
 
-  // Mở modal để chỉnh sửa bài tập đã có
-  // Lưu bài tập cần chỉnh sửa vào currentExercise để load dữ liệu vào form
-  // Hiển thị ExerciseModal với dữ liệu đã điền sẵn
   const handleEditExercise = (exercise: Exercise) => {
     setCurrentExercise(exercise);
     setExerciseModalVisible(true);
   };
 
-  // Xóa bài tập khỏi danh sách
-  // Sử dụng filter để loại bỏ bài tập có id trùng với exerciseId
-  // Cập nhật state exercises với danh sách mới (không chứa bài tập đã xóa)
   const handleDeleteExercise = (exerciseId: string) => {
     setExercises(exercises.filter(ex => ex.id !== exerciseId));
   };
 
-  // Lưu bài tập (thêm mới hoặc cập nhật)
-  // Nếu currentExercise tồn tại: cập nhật bài tập trong danh sách (tìm theo id và thay thế)
-  // Nếu currentExercise = null: thêm bài tập mới vào cuối danh sách với id được tạo từ Date.now()
-  // Đóng ExerciseModal sau khi lưu thành công
   const handleSaveExercise = (exercise: Exercise) => {
     if (currentExercise) {
       setExercises(exercises.map(ex => ex.id === exercise.id ? exercise : ex));
@@ -359,11 +419,6 @@ function LessonModal({ visible, lesson, onClose, onSave }: {
     setExerciseModalVisible(false);
   };
 
-  // Lưu bài học (tạo mới hoặc cập nhật)
-  // Tạo object lessonData chứa: tieuDe, moTa, danhMuc, capDo, thoiGianUocTinh, và danh sách baiTap
-  // Nếu lesson tồn tại: gọi API update để cập nhật bài học đã có
-  // Nếu lesson = null: gọi API create để tạo bài học mới
-  // Sau khi lưu thành công: gọi onSave() để refresh danh sách, đóng modal, và hiển thị thông báo
   const handleSave = async () => {
     try {
       const lessonData = {
@@ -603,11 +658,6 @@ function ExerciseModal({ visible, exercise, onClose, onSave }: {
     }
   }, [exercise]);
 
-  // Lưu bài tập (trắc nghiệm)
-  // Xử lý các lựa chọn: thêm prefix chữ cái (A, B, C, D) vào đầu mỗi option
-  // Loại bỏ các option rỗng sau khi xử lý
-  // Tạo object exerciseData với: id (lấy từ exercise hiện tại hoặc tạo mới), type = 'multiple_choice', question, options đã xử lý, và correctAnswer
-  // Gọi onSave() để truyền dữ liệu về component cha (LessonModal)
   const handleSave = () => {
     const processedOptions = formData.options.map((option, index) => {
       const letter = String.fromCharCode(65 + index);
@@ -829,12 +879,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
-  lessonClass: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
+  classInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  classText: {
+    fontSize: 12,
+    color: '#666',
   },
   lessonActions: {
     flexDirection: 'row',
@@ -1076,6 +1129,38 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     color: '#fff',
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 16,
+  },
+  paginationButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+    borderColor: '#ccc',
+  },
+  paginationText: {
+    fontSize: 14,
+    color: '#666',
     fontWeight: '600',
   },
 });

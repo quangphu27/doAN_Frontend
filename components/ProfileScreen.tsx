@@ -31,7 +31,7 @@ const normalizeBirthDateInput = (value: string): string => {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
   const [fullName, setFullName] = useState(user?.hoTen || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.thongTinCaNhan?.soDienThoai || '');
@@ -52,7 +52,6 @@ export default function ProfileScreen() {
       setSavingProfile(true);
       await updateProfile({
         hoTen: fullName.trim(),
-        email: email.trim(),
         thongTinCaNhan: {
           ...(user.thongTinCaNhan || {}),
           soDienThoai: phone.trim() || undefined,
@@ -165,6 +164,23 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.push('/teacher/change-password' as any)}
+          >
+            <Ionicons name="lock-closed-outline" size={20} color="#4CAF50" style={{ marginRight: 8 }} />
+            <Text style={styles.secondaryButtonText}>Đổi mật khẩu</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.secondaryButton, styles.logoutButton]}
+            onPress={logout}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#F44336" style={{ marginRight: 8 }} />
+            <Text style={[styles.secondaryButtonText, styles.logoutButtonText]}>Đăng xuất</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
     </View>
   );
@@ -240,12 +256,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#4CAF50',
-    alignItems: 'center'
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center'
   },
   secondaryButtonText: {
     color: '#4CAF50',
     fontSize: 15,
     fontWeight: '600'
+  },
+  logoutButton: {
+    borderColor: '#F44336'
+  },
+  logoutButtonText: {
+    color: '#F44336'
   },
   buttonDisabled: {
     opacity: 0.7

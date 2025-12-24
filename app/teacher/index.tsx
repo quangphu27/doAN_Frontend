@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,10 +19,11 @@ import { api } from '../../lib/api';
 const { width } = Dimensions.get('window');
 
 export default function TeacherHome() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileMenuVisible, setProfileMenuVisible] = useState(false);
   const [stats, setStats] = useState({
     totalClasses: 0,
     totalStudents: 0,
@@ -98,9 +100,56 @@ export default function TeacherHome() {
             <Text style={styles.name}>{user?.hoTen}</Text>
             <Text style={styles.subtitle}>Giáo viên</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push('/teacher/profile' as any)}>
-            <Ionicons name="person-circle-outline" size={30} color="#fff" />
-          </TouchableOpacity>
+          <View>
+            <TouchableOpacity onPress={() => setProfileMenuVisible(true)}>
+              <Ionicons name="person-circle-outline" size={30} color="#fff" />
+            </TouchableOpacity>
+            <Modal
+              visible={profileMenuVisible}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setProfileMenuVisible(false)}
+            >
+              <TouchableOpacity
+                style={styles.modalOverlay}
+                activeOpacity={1}
+                onPress={() => setProfileMenuVisible(false)}
+              >
+                <View style={styles.profileMenu}>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setProfileMenuVisible(false);
+                      router.push('/teacher/profile' as any);
+                    }}
+                  >
+                    <Ionicons name="person-outline" size={20} color="#333" />
+                    <Text style={styles.menuItemText}>Cập nhật thông tin cá nhân</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setProfileMenuVisible(false);
+                      router.push('/teacher/change-password' as any);
+                    }}
+                  >
+                    <Ionicons name="lock-closed-outline" size={20} color="#333" />
+                    <Text style={styles.menuItemText}>Đổi mật khẩu</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.menuItem, styles.menuItemDanger]}
+                    onPress={() => {
+                      setProfileMenuVisible(false);
+                      logout();
+                    }}
+                  >
+                    <Ionicons name="log-out-outline" size={20} color="#F44336" />
+                    <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Đăng xuất</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </Modal>
+          </View>
         </View>
       </LinearGradient>
 
@@ -154,6 +203,14 @@ export default function TeacherHome() {
               <Ionicons name="notifications" size={32} color="#FF9800" />
               <Text style={styles.actionTitle}>Thông báo</Text>
               <Text style={styles.actionSubtitle}>Xem thông báo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/teacher/profile' as any)}
+            >
+              <Ionicons name="person" size={32} color="#2196F3" />
+              <Text style={styles.actionTitle}>Tài khoản</Text>
+              <Text style={styles.actionSubtitle}>Thông tin cá nhân</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -284,5 +341,43 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#666'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 60,
+    paddingRight: 20
+  },
+  profileMenu: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12
+  },
+  menuItemDanger: {
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    marginTop: 4
+  },
+  menuItemText: {
+    fontSize: 15,
+    color: '#333'
+  },
+  menuItemTextDanger: {
+    color: '#F44336'
   }
 });

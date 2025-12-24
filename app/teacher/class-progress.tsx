@@ -92,8 +92,10 @@ export default function ClassProgress() {
   const [viewMode, setViewMode] = useState<'assignments' | 'students'>('assignments');
 
   useEffect(() => {
-    loadProgress();
-  }, []);
+    if (classId) {
+      loadProgress();
+    }
+  }, [classId]);
 
   const loadProgress = async () => {
     try {

@@ -60,8 +60,10 @@ export default function TeacherClassDetails() {
   const [loadingGameDetail, setLoadingGameDetail] = useState(false);
 
   useEffect(() => {
-    loadClassDetails();
-  }, []);
+    if (classId) {
+      loadClassDetails();
+    }
+  }, [classId]);
 
   const loadClassDetails = async () => {
     try {

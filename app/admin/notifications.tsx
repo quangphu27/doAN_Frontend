@@ -21,7 +21,7 @@ interface NotificationHistory {
   type: 'reminder' | 'summary' | 'achievement' | 'system' | 'schedule';
   title: string;
   content: string;
-  targetRole: 'all' | 'parent' | 'child';
+  targetRole: 'all' | 'parent' | 'child' | 'teacher' | 'teacher,parent' | 'parent,teacher';
   recipientCount: number;
   status: 'sent' | 'scheduled' | 'failed';
   scheduledAt: string;
@@ -176,6 +176,12 @@ export default function NotificationManagement() {
                      notification.type === 'summary' ? 'Tóm tắt' :
                      notification.type === 'achievement' ? 'Thành tích' :
                      notification.type === 'system' ? 'Hệ thống' : 'Lịch trình'}
+                    {' - '}
+                    {notification.targetRole === 'all' ? 'Tất cả' :
+                     notification.targetRole === 'parent' ? 'Phụ huynh' :
+                     notification.targetRole === 'teacher' ? 'Giáo viên' :
+                     (notification.targetRole === 'teacher,parent' || notification.targetRole === 'parent,teacher') ? 'Giáo viên & Phụ huynh' :
+                     'Trẻ em'}
                   </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(notification.status) }]}>
@@ -214,10 +220,9 @@ function SendNotificationModal({ visible, onClose, onSend }: {
   onSend: () => void;
 }) {
   const [formData, setFormData] = useState({
-    type: 'system' as 'reminder' | 'summary' | 'achievement' | 'system' | 'schedule',
     title: '',
     content: '',
-    targetRole: 'all' as 'all' | 'parent' | 'child'
+    targetRoles: ['parent'] as ('parent' | 'teacher')[]
   });
 
   const [sending, setSending] = useState(false);
@@ -228,10 +233,26 @@ function SendNotificationModal({ visible, onClose, onSend }: {
       return;
     }
 
+    if (formData.targetRoles.length === 0) {
+      Alert.alert('Lỗi', 'Vui lòng chọn ít nhất một đối tượng nhận');
+      return;
+    }
+
     try {
       setSending(true);
-      await api.notifications.sendToAll(formData);
+      const targetRole = formData.targetRoles.length === 2 ? 'teacher,parent' : formData.targetRoles[0];
+      await api.notifications.sendToAll({
+        type: 'reminder',
+        title: formData.title,
+        content: formData.content,
+        targetRole
+      });
       Alert.alert('Thành công', 'Đã gửi thông báo thành công');
+      setFormData({
+        title: '',
+        content: '',
+        targetRoles: ['parent']
+      });
       onClose();
       onSend();
     } catch (error) {
@@ -253,58 +274,38 @@ function SendNotificationModal({ visible, onClose, onSend }: {
 
         <ScrollView style={styles.modalContent}>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Loại thông báo *</Text>
-            <View style={styles.typeSelector}>
-              {['system', 'reminder', 'summary', 'achievement', 'schedule'].map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.typeOption,
-                    formData.type === type && styles.typeOptionActive
-                  ]}
-                  onPress={() => setFormData({ ...formData, type: type as any })}
-                >
-                  <Ionicons 
-                    name={getTypeIcon(type) as any} 
-                    size={16} 
-                    color={formData.type === type ? '#fff' : '#666'} 
-                  />
-                  <Text style={[
-                    styles.typeOptionText,
-                    formData.type === type && styles.typeOptionTextActive
-                  ]}>
-                    {type === 'system' ? 'Hệ thống' :
-                     type === 'reminder' ? 'Nhắc nhở' :
-                     type === 'summary' ? 'Tóm tắt' :
-                     type === 'achievement' ? 'Thành tích' : 'Lịch trình'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Đối tượng nhận *</Text>
             <View style={styles.targetSelector}>
-              {['all', 'parent', 'child'].map((role) => (
+              {['parent', 'teacher'].map((role) => (
                 <TouchableOpacity
                   key={role}
                   style={[
                     styles.targetOption,
-                    formData.targetRole === role && styles.targetOptionActive
+                    formData.targetRoles.includes(role as 'parent' | 'teacher') && styles.targetOptionActive
                   ]}
-                  onPress={() => setFormData({ ...formData, targetRole: role as any })}
+                  onPress={() => {
+                    const currentRoles = [...formData.targetRoles];
+                    const index = currentRoles.indexOf(role as 'parent' | 'teacher');
+                    if (index > -1) {
+                      currentRoles.splice(index, 1);
+                    } else {
+                      currentRoles.push(role as 'parent' | 'teacher');
+                    }
+                    setFormData({ ...formData, targetRoles: currentRoles });
+                  }}
                 >
                   <Text style={[
                     styles.targetOptionText,
-                    formData.targetRole === role && styles.targetOptionTextActive
+                    formData.targetRoles.includes(role as 'parent' | 'teacher') && styles.targetOptionTextActive
                   ]}>
-                    {role === 'all' ? 'Tất cả' :
-                     role === 'parent' ? 'Phụ huynh' : 'Trẻ em'}
+                    {role === 'parent' ? 'Phụ huynh' : 'Giáo viên'}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {formData.targetRoles.length === 0 && (
+              <Text style={styles.errorText}>Vui lòng chọn ít nhất một đối tượng</Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -557,6 +558,11 @@ const styles = StyleSheet.create({
   },
   targetOptionTextActive: {
     color: '#fff',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#F44336',
+    marginTop: 4,
   },
   modalContainer: {
     flex: 1,

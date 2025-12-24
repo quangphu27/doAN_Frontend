@@ -5,11 +5,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   RefreshControl,
   Dimensions,
-  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,32 +17,11 @@ import { api } from '../../lib/api';
 
 const { width } = Dimensions.get('window');
 
-interface Class {
-  _id: string;
-  tenLop: string;
-  moTa?: string;
-  maLop: string;
-  hocSinh: Array<{
-    _id: string;
-    hoTen: string;
-  }>;
-  baiTap: Array<{
-    _id: string;
-    tieuDe: string;
-  }>;
-  troChoi: Array<{
-    _id: string;
-    tieuDe: string;
-  }>;
-}
-
 export default function TeacherHome() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
-  const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [profileMenuVisible, setProfileMenuVisible] = useState(false);
   const [stats, setStats] = useState({
     totalClasses: 0,
     totalStudents: 0,
@@ -53,53 +30,21 @@ export default function TeacherHome() {
   });
 
   useEffect(() => {
-    loadData();
+    loadStats();
   }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([loadClasses(), loadStats()]);
-    } catch (error) {
-      Alert.alert('Lỗi', 'Không thể tải dữ liệu');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadClasses = async () => {
-    try {
-      const response = await api.classes.list();
-      if (response && response.success) {
-        if (response.data && response.data.classes) {
-          setClasses(response.data.classes);
-        } else if (Array.isArray(response.data)) {
-          setClasses(response.data);
-        } else {
-          setClasses([]);
-        }
-      } else {
-        setClasses([]);
-      }
-    } catch (error: any) {
-      console.error('Error loading classes:', error);
-      setClasses([]);
-    }
-  };
 
   const loadStats = async () => {
     try {
-      const allClasses = classes.length > 0 ? classes : await (async () => {
-        const response = await api.classes.list();
-        return (response.data?.classes || response.data || []);
-      })();
+      setLoading(true);
+      const response = await api.classes.list();
+      const allClasses = (response.data?.classes || response.data || []);
 
       const totalClasses = allClasses.length;
       let totalStudents = 0;
       let totalLessons = 0;
       let totalGames = 0;
 
-      allClasses.forEach((classItem: Class) => {
+      allClasses.forEach((classItem: any) => {
         totalStudents += classItem.hocSinh?.length || 0;
         totalLessons += classItem.baiTap?.length || 0;
         totalGames += classItem.troChoi?.length || 0;
@@ -113,27 +58,15 @@ export default function TeacherHome() {
       });
     } catch (error) {
       console.error('Error loading stats:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadStats();
     setRefreshing(false);
-  };
-
-  const handleViewClass = (classItem: Class) => {
-    router.push({
-      pathname: '/teacher/class-details',
-      params: { classId: classItem._id }
-    } as any);
-  };
-
-  const handleViewProgress = (classItem: Class) => {
-    router.push({
-      pathname: '/teacher/class-progress',
-      params: { classId: classItem._id }
-    } as any);
   };
 
   if (loading) {
@@ -165,11 +98,9 @@ export default function TeacherHome() {
             <Text style={styles.name}>{user?.hoTen}</Text>
             <Text style={styles.subtitle}>Giáo viên</Text>
           </View>
-          <View style={styles.profileButtonContainer}>
-            <TouchableOpacity onPress={() => setProfileMenuVisible((v) => !v)}>
-              <Ionicons name="person-circle-outline" size={30} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => router.push('/teacher/profile' as any)}>
+            <Ionicons name="person-circle-outline" size={30} color="#fff" />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
@@ -206,119 +137,27 @@ export default function TeacherHome() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lớp học của tôi ({classes.length})</Text>
-          {classes.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="school-outline" size={64} color="#ccc" />
-              <Text style={styles.emptyText}>Chưa có lớp học nào</Text>
-              <Text style={styles.emptySubtext}>Admin sẽ tạo lớp và thêm bạn vào</Text>
-            </View>
-          ) : (
-            classes.map((classItem) => (
-              <TouchableOpacity
-                key={classItem._id}
-                style={styles.classCard}
-                onPress={() => handleViewClass(classItem)}
-              >
-                <View style={styles.classHeader}>
-                  <View style={styles.classInfo}>
-                    <Text style={styles.className}>{classItem.tenLop}</Text>
-                    <Text style={styles.classCode}>Mã lớp: {classItem.maLop}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={24} color="#666" />
-                </View>
-
-                {classItem.moTa && (
-                  <Text style={styles.classDescription}>{classItem.moTa}</Text>
-                )}
-
-                <View style={styles.classStats}>
-                  <View style={styles.statItem}>
-                    <Ionicons name="people" size={16} color="#666" />
-                    <Text style={styles.statText}>
-                      {classItem.hocSinh?.length || 0} học sinh
-                    </Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Ionicons name="book" size={16} color="#666" />
-                    <Text style={styles.statText}>
-                      {classItem.baiTap?.length || 0} bài tập
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.classActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleViewClass(classItem)}
-                  >
-                    <Ionicons name="eye" size={18} color="#2196F3" />
-                    <Text style={styles.actionText}>Chi tiết</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleViewProgress(classItem)}
-                  >
-                    <Ionicons name="bar-chart" size={18} color="#4CAF50" />
-                    <Text style={styles.actionText}>Kết quả</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
+          <Text style={styles.sectionTitle}>Thao tác nhanh</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/teacher/classes' as any)}
+            >
+              <Ionicons name="school" size={32} color="#4CAF50" />
+              <Text style={styles.actionTitle}>Lớp học</Text>
+              <Text style={styles.actionSubtitle}>Quản lý lớp học</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/teacher/notifications' as any)}
+            >
+              <Ionicons name="notifications" size={32} color="#FF9800" />
+              <Text style={styles.actionTitle}>Thông báo</Text>
+              <Text style={styles.actionSubtitle}>Xem thông báo</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
-
-      <Modal
-        visible={profileMenuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setProfileMenuVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setProfileMenuVisible(false)}
-        >
-          <View style={styles.profileMenuContainer}>
-            <View style={styles.profileMenu} onStartShouldSetResponder={() => true}>
-              <TouchableOpacity
-                style={styles.profileMenuItem}
-                onPress={() => {
-                  setProfileMenuVisible(false);
-                  router.push('/teacher/profile' as any);
-                }}
-              >
-                <Ionicons name="person" size={18} color="#333" />
-                <Text style={styles.profileMenuText}>Xem thông tin cá nhân</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.profileMenuItem}
-                onPress={() => {
-                  setProfileMenuVisible(false);
-                  router.push('/teacher/change-password' as any);
-                }}
-              >
-                <Ionicons name="key" size={18} color="#333" />
-                <Text style={styles.profileMenuText}>Đổi mật khẩu</Text>
-              </TouchableOpacity>
-              <View style={styles.profileMenuDivider} />
-              <TouchableOpacity
-                style={styles.profileMenuItem}
-                onPress={() => {
-                  setProfileMenuVisible(false);
-                  logout();
-                }}
-              >
-                <Ionicons name="log-out" size={18} color="#E53935" />
-                <Text style={[styles.profileMenuText, { color: '#E53935' }]}>
-                  Đăng xuất
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 }
@@ -372,11 +211,51 @@ const styles = StyleSheet.create({
   section: {
     padding: 16
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#333'
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  actionCard: {
+    width: (width - 48) / 3,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#333',
-    marginBottom: 16
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  actionSubtitle: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -405,137 +284,5 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#666'
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    marginTop: 16,
-    fontWeight: '600'
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#ccc',
-    marginTop: 8,
-    textAlign: 'center'
-  },
-  classCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
-  },
-  classHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  classInfo: {
-    flex: 1
-  },
-  className: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4
-  },
-  classCode: {
-    fontSize: 14,
-    color: '#666'
-  },
-  classDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12
-  },
-  classStats: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0'
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  statText: {
-    fontSize: 14,
-    color: '#666'
-  },
-  classActions: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0'
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500'
-  },
-  profileButtonContainer: {
-    position: 'relative',
-    zIndex: 1
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 50,
-    paddingRight: 20
-  },
-  profileMenuContainer: {
-    alignItems: 'flex-end'
-  },
-  profileMenu: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-    minWidth: 200
-  },
-  profileMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    gap: 8
-  },
-  profileMenuText: {
-    fontSize: 14,
-    color: '#333'
-  },
-  profileMenuDivider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 6
   }
 });

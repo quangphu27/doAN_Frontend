@@ -66,8 +66,10 @@ export default function StudentProgress() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    loadProgress();
-  }, []);
+    if (classId && studentId) {
+      loadProgress();
+    }
+  }, [classId, studentId]);
 
   const loadProgress = async () => {
     try {

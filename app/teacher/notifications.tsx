@@ -17,60 +17,38 @@ import { api } from '../../lib/api';
 
 interface Notification {
   id: string;
+  _id?: string;
+  type: string;
   title: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  content: string;
   isRead: boolean;
   createdAt: string;
-  childName?: string;
-  childId?: string;
-}
-
-interface Child {
-  id: string;
-  name: string;
-  email: string;
-  age: number;
-  gender: string;
-  avatarUrl?: string;
-  learningLevel: string;
 }
 
 export default function Notifications() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [unreadCount, setUnreadCount] = useState(0);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
   useEffect(() => {
     loadData();
+    loadUnreadCount();
   }, []);
 
   const loadData = async () => {
     try {
-      const [notificationsResponse, childrenResponse] = await Promise.all([
-        api.notifications.list(),
-        api.children.list()
-      ]);
-
+      const notificationsResponse = await api.notifications.list();
       const notificationsData = notificationsResponse.data?.notifications || [];
       const mappedNotifications = notificationsData.map((notification: any) => ({
         ...notification,
         id: notification._id || notification.id
       }));
-
-      const childrenData = childrenResponse.data || [];
-      const mappedChildren = childrenData.map((child: any) => ({
-        ...child,
-        id: child._id || child.id
-      }));
-
       setNotifications(mappedNotifications);
-      setChildren(mappedChildren);
     } catch (error: any) {
       console.error('Error loading data:', error);
       Alert.alert('Lỗi', 'Không thể tải thông báo');
@@ -79,22 +57,32 @@ export default function Notifications() {
     }
   };
 
+  const loadUnreadCount = async () => {
+    try {
+      const response = await api.notifications.getUnreadCount();
+      setUnreadCount(response.data.count || 0);
+    } catch (error: any) {
+      console.error('Error loading unread count:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([loadData(), loadUnreadCount()]);
     setRefreshing(false);
   };
 
   const markAsRead = async (notificationId: string) => {
     try {
       await api.notifications.markAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === notificationId 
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === notificationId
             ? { ...notification, isRead: true }
             : notification
         )
       );
+      setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error: any) {
       console.error('Error marking notification as read:', error);
     }
@@ -103,9 +91,10 @@ export default function Notifications() {
   const markAllAsRead = async () => {
     try {
       await api.notifications.markAllAsRead();
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.map(notification => ({ ...notification, isRead: true }))
       );
+      setUnreadCount(0);
       Alert.alert('Thành công', 'Đã đánh dấu tất cả thông báo là đã đọc');
     } catch (error: any) {
       console.error('Error marking all as read:', error);
@@ -116,9 +105,12 @@ export default function Notifications() {
   const deleteNotification = async (notificationId: string) => {
     try {
       await api.notifications.delete(notificationId);
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.filter(notification => notification.id !== notificationId)
       );
+      if (!notifications.find(n => n.id === notificationId)?.isRead) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
     } catch (error: any) {
       console.error('Error deleting notification:', error);
       Alert.alert('Lỗi', 'Không thể xóa thông báo');
@@ -127,11 +119,11 @@ export default function Notifications() {
 
   const formatTimeAgo = (dateString: string) => {
     if (!dateString) return 'Vừa xong';
-    
+
     const now = new Date();
     const date = new Date(dateString);
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
+
     if (diffInSeconds < 60) return 'Vừa xong';
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`;
@@ -141,38 +133,44 @@ export default function Notifications() {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'success': return 'checkmark-circle';
-      case 'warning': return 'warning';
-      case 'error': return 'alert-circle';
-      default: return 'information-circle';
+      case 'nhacNho':
+      case 'reminder': return 'time';
+      case 'tomTat':
+      case 'summary': return 'document-text';
+      case 'thanhTich':
+      case 'achievement': return 'trophy';
+      case 'heThong':
+      case 'system': return 'settings';
+      case 'lichHoc':
+      case 'schedule': return 'calendar';
+      default: return 'notifications';
     }
   };
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'success': return '#4CAF50';
-      case 'warning': return '#FF9800';
-      case 'error': return '#F44336';
-      default: return '#2196F3';
+      case 'nhacNho':
+      case 'reminder': return '#FF9800';
+      case 'tomTat':
+      case 'summary': return '#4CAF50';
+      case 'thanhTich':
+      case 'achievement': return '#FFD700';
+      case 'heThong':
+      case 'system': return '#9C27B0';
+      case 'lichHoc':
+      case 'schedule': return '#2196F3';
+      default: return '#666';
     }
   };
 
-  const getChildName = (childId?: string) => {
-    if (!childId) return '';
-    const child = children.find(c => c.id === childId);
-    return child ? child.name : '';
-  };
-
-  const filteredNotifications = filter === 'unread' 
+  const filteredNotifications = filter === 'unread'
     ? notifications.filter(n => !n.isRead)
     : notifications;
-
-  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
+        <ActivityIndicator size="large" color="#4CAF50" />
         <Text style={styles.loadingText}>Đang tải thông báo...</Text>
       </View>
     );
@@ -181,7 +179,7 @@ export default function Notifications() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#2196F3', '#1976D2']}
+        colors={['#4CAF50', '#45A049']}
         style={styles.header}
       >
         <Text style={styles.headerTitle}>Thông báo</Text>
@@ -211,7 +209,7 @@ export default function Notifications() {
         </TouchableOpacity>
         {unreadCount > 0 && (
           <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
-            <Ionicons name="checkmark-done" size={16} color="#2196F3" />
+            <Ionicons name="checkmark-done" size={16} color="#4CAF50" />
             <Text style={styles.markAllText}>Đánh dấu tất cả</Text>
           </TouchableOpacity>
         )}
@@ -230,34 +228,38 @@ export default function Notifications() {
               {filter === 'all' ? 'Chưa có thông báo nào' : 'Không có thông báo chưa đọc'}
             </Text>
             <Text style={styles.emptySubtext}>
-              {filter === 'all' 
-                ? 'Bạn sẽ nhận được thông báo về hoạt động học tập của trẻ'
+              {filter === 'all'
+                ? 'Bạn sẽ nhận được thông báo từ hệ thống'
                 : 'Tất cả thông báo đã được đọc'
               }
             </Text>
           </View>
         ) : (
           filteredNotifications.map((notification) => (
-            <View 
-              key={notification.id} 
+            <TouchableOpacity
+              key={notification.id}
               style={[
                 styles.notificationCard,
                 !notification.isRead && styles.unreadCard
               ]}
+              onPress={() => {
+                setSelectedNotification(notification);
+                setDetailModalVisible(true);
+                if (!notification.isRead) {
+                  markAsRead(notification.id);
+                }
+              }}
             >
               <View style={styles.notificationHeader}>
                 <View style={styles.iconContainer}>
-                  <Ionicons 
-                    name={getNotificationIcon(notification.type) as any} 
-                    size={24} 
-                    color={getNotificationColor(notification.type)} 
+                  <Ionicons
+                    name={getNotificationIcon(notification.type) as any}
+                    size={24}
+                    color={getNotificationColor(notification.type)}
                   />
                 </View>
                 <View style={styles.notificationInfo}>
                   <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  {notification.childName && (
-                    <Text style={styles.childName}>{notification.childName}</Text>
-                  )}
                   <Text style={styles.notificationTime}>
                     {formatTimeAgo(notification.createdAt)}
                   </Text>
@@ -266,26 +268,32 @@ export default function Notifications() {
                   {!notification.isRead && (
                     <TouchableOpacity
                       style={styles.actionButton}
-                      onPress={() => markAsRead(notification.id)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        markAsRead(notification.id);
+                      }}
                     >
                       <Ionicons name="checkmark" size={16} color="#4CAF50" />
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
                     style={styles.actionButton}
-                    onPress={() => deleteNotification(notification.id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      deleteNotification(notification.id);
+                    }}
                   >
                     <Ionicons name="trash" size={16} color="#F44336" />
                   </TouchableOpacity>
                 </View>
               </View>
-              
-              <Text style={styles.notificationMessage}>{notification.message}</Text>
-              
+
+              <Text style={styles.notificationMessage} numberOfLines={2}>{notification.content}</Text>
+
               {!notification.isRead && (
                 <View style={styles.unreadIndicator} />
               )}
-            </View>
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
@@ -314,14 +322,11 @@ export default function Notifications() {
                   />
                 </View>
                 <Text style={styles.detailTitle}>{selectedNotification.title}</Text>
-                {selectedNotification.childName && (
-                  <Text style={styles.detailChildName}>{selectedNotification.childName}</Text>
-                )}
                 <Text style={styles.detailTime}>
                   {formatTimeAgo(selectedNotification.createdAt)}
                 </Text>
                 <View style={styles.detailDivider} />
-                <Text style={styles.detailContent}>{selectedNotification.message}</Text>
+                <Text style={styles.detailContent}>{selectedNotification.content}</Text>
               </ScrollView>
             )}
             <View style={styles.modalFooter}>
@@ -399,7 +404,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterButtonActive: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#4CAF50',
   },
   filterText: {
     fontSize: 14,
@@ -413,12 +418,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#E8F5E9',
     borderRadius: 6,
   },
   markAllText: {
     fontSize: 12,
-    color: '#2196F3',
+    color: '#4CAF50',
     marginLeft: 4,
   },
   content: {
@@ -457,7 +462,7 @@ const styles = StyleSheet.create({
   },
   unreadCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    borderLeftColor: '#4CAF50',
   },
   notificationHeader: {
     flexDirection: 'row',
@@ -480,11 +485,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
-  },
-  childName: {
-    fontSize: 12,
-    color: '#2196F3',
     marginBottom: 2,
   },
   notificationTime: {
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2196F3',
+    backgroundColor: '#4CAF50',
   },
   modalOverlay: {
     flex: 1,
@@ -558,13 +558,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  detailChildName: {
-    fontSize: 16,
-    color: '#2196F3',
-    textAlign: 'center',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
   detailTime: {
     fontSize: 14,
     color: '#666',
@@ -587,7 +580,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
   },
   modalCloseButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#4CAF50',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -598,3 +591,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

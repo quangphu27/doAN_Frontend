@@ -101,16 +101,30 @@ export default function Activities() {
     try {
       const response = await api.children.list();
       const childrenData = response.data || [];
-      const mappedChildren = childrenData.map((child: any) => ({
-        ...child,
-        id: child._id || child.id
-      }));
+      console.log('Children data from API:', childrenData);
       
+      const mappedChildren = childrenData.map((child: any) => {
+        const mapped = {
+          id: child._id || child.id,
+          name: child.hoTen || child.name || 'Trẻ',
+          email: child.email || '',
+          age: child.ngaySinh ? new Date().getFullYear() - new Date(child.ngaySinh).getFullYear() : 0,
+          gender: child.gioiTinh || 'other',
+          avatarUrl: child.anhDaiDien || undefined,
+          learningLevel: child.capDoHocTap || 'coBan',
+          hoTen: child.hoTen // Giữ lại để fallback
+        };
+        console.log('Mapped child:', mapped);
+        return mapped;
+      });
+      
+      console.log('Mapped children:', mappedChildren);
       setChildren(mappedChildren);
       if (mappedChildren.length > 0) {
         setSelectedChild(mappedChildren[0]);
       }
     } catch (error: any) {
+      console.error('Error loading children:', error);
       Alert.alert('Lỗi', 'Không thể tải danh sách trẻ');
     } finally {
       setLoading(false);
@@ -179,7 +193,9 @@ export default function Activities() {
         style={styles.header}
       >
         <Text style={styles.headerTitle}>Lịch sử đăng nhập</Text>
-        <Text style={styles.headerSubtitle}>Xem thời gian đăng nhập và đăng xuất của trẻ</Text>
+        <Text style={styles.headerSubtitle}>
+          {selectedChild ? `Xem thời gian đăng nhập và đăng xuất của ${selectedChild.name || 'trẻ'}` : 'Xem thời gian đăng nhập và đăng xuất của trẻ'}
+        </Text>
       </LinearGradient>
 
       <View style={styles.childSelectorContainer}>
@@ -188,23 +204,29 @@ export default function Activities() {
           showsHorizontalScrollIndicator={false}
           style={styles.childSelector}
         >
-          {children.map((child) => (
-            <TouchableOpacity
-              key={child.id}
-              style={[
-                styles.childButton,
-                selectedChild?.id === child.id && styles.childButtonActive
-              ]}
-              onPress={() => setSelectedChild(child)}
-            >
-              <Text style={[
-                styles.childButtonText,
-                selectedChild?.id === child.id && styles.childButtonTextActive
-              ]}>
-                {child.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {children.length === 0 ? (
+            <View style={styles.noChildContainer}>
+              <Text style={styles.noChildText}>Chưa có trẻ nào</Text>
+            </View>
+          ) : (
+            children.map((child) => (
+              <TouchableOpacity
+                key={child.id}
+                style={[
+                  styles.childButton,
+                  selectedChild?.id === child.id && styles.childButtonActive
+                ]}
+                onPress={() => setSelectedChild(child)}
+              >
+                <Text style={[
+                  styles.childButtonText,
+                  selectedChild?.id === child.id && styles.childButtonTextActive
+                ]}>
+                  {child.name || 'Trẻ'}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
         </ScrollView>
       </View>
 
@@ -334,6 +356,16 @@ const styles = StyleSheet.create({
   },
   childButtonTextActive: {
     color: '#fff',
+  },
+  noChildContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  noChildText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
   },
   content: {
     flex: 1,

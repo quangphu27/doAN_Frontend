@@ -61,18 +61,61 @@ export default function ItemResults() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const normalizeScores = (list: any[]) =>
+        list.map((s) => {
+          const teacherScore =
+            typeof s.teacherScore === 'number'
+              ? s.teacherScore
+              : typeof s.diemGiaoVien === 'number'
+                ? s.diemGiaoVien
+                : typeof s.score === 'number'
+                  ? s.score
+                  : null;
+          return { ...s, teacherScore };
+        });
+
+      const calcAverage = (list: any[], currentItemInfo: any) => {
+        if (!list || list.length === 0) return 0;
+        const isColoring = type === 'game' && (currentItemInfo?.type === 'toMau' || currentItemInfo?.loai === 'toMau');
+        if (isColoring) {
+          const validScores = list.filter(s => typeof s.teacherScore === 'number');
+          if (validScores.length === 0) return 0;
+          const total = validScores.reduce((sum, s) => sum + (s.teacherScore || 0), 0);
+          return Math.round(total / validScores.length);
+        }
+        const total = list.reduce((sum, s) => {
+          const score = typeof s.teacherScore === 'number' ? s.teacherScore : s.score || 0;
+          return sum + score;
+        }, 0);
+        return Math.round(total / list.length);
+      };
+
       if (type === 'lesson') {
         const res = await api.lessons.getResults(itemId as string);
         setItemInfo(res.data.lesson);
-        setSubmitted(res.data.submittedStudents || []);
+        const sub = normalizeScores(res.data.submittedStudents || []);
+        setSubmitted(sub);
         setNotSubmitted(res.data.notSubmittedStudents || []);
-        setSummary(res.data.summary || summary);
+        const avg = calcAverage(sub, res.data.lesson);
+        setSummary({
+          totalStudents: res.data.summary?.totalStudents || sub.length + (res.data.notSubmittedStudents?.length || 0),
+          submittedCount: sub.length,
+          notSubmittedCount: res.data.notSubmittedStudents?.length || 0,
+          averageScore: avg
+        });
       } else {
         const res = await api.games.getResults(itemId as string);
         setItemInfo(res.data.game);
-        setSubmitted(res.data.submittedStudents || []);
+        const sub = normalizeScores(res.data.submittedStudents || []);
+        setSubmitted(sub);
         setNotSubmitted(res.data.notSubmittedStudents || []);
-        setSummary(res.data.summary || summary);
+        const avg = calcAverage(sub, res.data.game);
+        setSummary({
+          totalStudents: res.data.summary?.totalStudents || sub.length + (res.data.notSubmittedStudents?.length || 0),
+          submittedCount: sub.length,
+          notSubmittedCount: res.data.notSubmittedStudents?.length || 0,
+          averageScore: avg
+        });
       }
     } catch (e: any) {
     } finally {
@@ -217,9 +260,31 @@ export default function ItemResults() {
                   <Text style={styles.name}>{s.studentName}</Text>
                   <Text style={styles.sub}>{s.className}</Text>
                 </View>
-                <Text style={[styles.score, { color: getScoreColor(s.teacherScore ?? s.score) }]}>
-                  {typeof s.teacherScore === 'number' ? `${s.teacherScore}%` : `${s.score}%`}
-                </Text>
+                {(() => {
+                  const isColoring = type === 'game' && (itemInfo?.type === 'toMau' || itemInfo?.loai === 'toMau');
+                  if (isColoring) {
+                    if (typeof s.teacherScore === 'number') {
+                      return (
+                        <Text style={[styles.score, { color: getScoreColor(s.teacherScore) }]}>
+                          {s.teacherScore}%
+                        </Text>
+                      );
+                    } else {
+                      return (
+                        <Text style={[styles.score, { color: '#999' }]}>
+                          Chưa có điểm
+                        </Text>
+                      );
+                    }
+                  } else {
+                    const scoreValue = typeof s.teacherScore === 'number' ? s.teacherScore : s.score;
+                    return (
+                      <Text style={[styles.score, { color: getScoreColor(scoreValue) }]}>
+                        {scoreValue}%
+                      </Text>
+                    );
+                  }
+                })()}
               </View>
               <View style={styles.cardStats}>
                 <Text style={styles.statText}>Thời gian: {formatTime(s.timeSpent || 0)}</Text>

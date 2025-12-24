@@ -38,6 +38,10 @@ export default function UserManagement() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [classesModalVisible, setClassesModalVisible] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<User | null>(null);
+  const [teacherClasses, setTeacherClasses] = useState<any[]>([]);
+  const [teacherClassesLoading, setTeacherClassesLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [page, setPage] = useState(1);
@@ -71,41 +75,34 @@ export default function UserManagement() {
     setRefreshing(false);
   };
 
-  // Mở modal để thêm người dùng mới
-  const handleAddUser = () => {
-    setEditingUser(null);
-    setModalVisible(true);
-  };
-
   // Mở modal để chỉnh sửa thông tin người dùng
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setModalVisible(true);
   };
 
-  const handleToggleUserStatus = (user: User) => {
+  const handleDeleteUser = (user: User) => {
     const userId = user.id || user._id;
     if (!userId) {
       Alert.alert('Lỗi', 'Không tìm thấy ID người dùng');
       return;
     }
-    
-    const action = user.trangThai ? 'khóa' : 'kích hoạt';
+
     Alert.alert(
-      user.trangThai ? 'Khóa tài khoản' : 'Kích hoạt tài khoản',
-      `Bạn có chắc chắn muốn ${action} tài khoản ${user.hoTen}?`,
+      'Xóa tài khoản',
+      `Bạn có chắc chắn muốn xóa tài khoản ${user.hoTen}?`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: action === 'khóa' ? 'Khóa' : 'Kích hoạt',
-          style: action === 'khóa' ? 'destructive' : 'default',
+          text: 'Xóa',
+          style: 'destructive',
           onPress: async () => {
             try {
-              await api.users.update(userId, { trangThai: !user.trangThai });
+              await api.users.delete(userId);
               await loadUsers();
-              Alert.alert('Thành công', `Đã ${action} tài khoản`);
+              Alert.alert('Thành công', 'Đã xóa tài khoản');
             } catch (error: any) {
-              Alert.alert('Lỗi', error.message || `Không thể ${action} tài khoản`);
+              Alert.alert('Lỗi', error.message || 'Không thể xóa tài khoản');
             }
           }
         }
@@ -113,30 +110,26 @@ export default function UserManagement() {
     );
   };
 
-  const handleResetPassword = (userId: string) => {
-    Alert.prompt(
-      'Đặt lại mật khẩu',
-      'Nhập mật khẩu mới:',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Đặt lại',
-          onPress: async (newPassword: string | undefined) => {
-            if (newPassword && newPassword.length >= 6) {
-              try {
-                await api.users.resetPassword(userId, { matKhauMoi: newPassword });
-                Alert.alert('Thành công', 'Đã đặt lại mật khẩu');
-              } catch (error: any) {
-                Alert.alert('Lỗi', error.message || 'Không thể đặt lại mật khẩu');
-              }
-            } else {
-              Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
-            }
-          }
-        }
-      ],
-      'secure-text'
-    );
+  const handleViewTeacherClasses = async (user: User) => {
+    if (user.vaiTro !== 'giaoVien') return;
+    setSelectedTeacher(user);
+    setClassesModalVisible(true);
+    setTeacherClassesLoading(true);
+    try {
+      const response = await api.classes.list({ limit: 500 });
+      const classesData = response.data?.classes || response.data || [];
+      const filtered = classesData.filter((cls: any) => {
+        const teacherId = cls.giaoVien?._id || cls.giaoVien?.id || cls.giaoVien;
+        const uid = user.id || user._id;
+        return teacherId && uid && teacherId.toString() === uid.toString();
+      });
+      setTeacherClasses(filtered);
+    } catch (error: any) {
+      Alert.alert('Lỗi', 'Không thể tải danh sách lớp của giáo viên');
+      setTeacherClasses([]);
+    } finally {
+      setTeacherClassesLoading(false);
+    }
   };
 
   const handleCreateTeacher = () => {
@@ -187,9 +180,6 @@ export default function UserManagement() {
             <TouchableOpacity style={styles.addButton} onPress={handleCreateTeacher}>
               <Ionicons name="school" size={20} color="#fff" />
               <Text style={styles.addButtonText}>Giáo viên</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddUser}>
-              <Ionicons name="add" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -242,10 +232,15 @@ export default function UserManagement() {
         }
       >
         {users.map((user, index) => (
-          <View key={user.id || user._id || `user-${index}`} style={[
+          <TouchableOpacity
+            key={user.id || user._id || `user-${index}`}
+            style={[
             styles.userCard,
             !user.trangThai && styles.userCardInactive
-          ]}>
+          ]}
+            activeOpacity={user.vaiTro === 'giaoVien' ? 0.8 : 1}
+            onPress={() => user.vaiTro === 'giaoVien' && handleViewTeacherClasses(user)}
+          >
             <View style={styles.userInfo}>
               <View style={[styles.roleBadge, { backgroundColor: getRoleColor(user.vaiTro) }]}>
                 <Ionicons name={getRoleIcon(user.vaiTro) as any} size={16} color="#fff" />
@@ -258,11 +253,7 @@ export default function UserManagement() {
                   ]}>
                     {user.hoTen}
                   </Text>
-                  {!user.trangThai && (
-                    <View style={styles.inactiveBadge}>
-                      <Text style={styles.inactiveText}>KHÓA</Text>
-                    </View>
-                  )}
+              {/* Ẩn badge khóa vì đã bỏ chức năng khóa */}
                 </View>
                 <Text style={styles.userEmail}>{user.email}</Text>
                 <Text style={styles.userRole}>
@@ -274,32 +265,28 @@ export default function UserManagement() {
             </View>
             
             <View style={styles.userActions}>
+              {user.vaiTro === 'giaoVien' && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleViewTeacherClasses(user)}
+                >
+                  <Ionicons name="book" size={18} color="#FF9800" />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handleEditUser(user)}
               >
                 <Ionicons name="pencil" size={18} color="#2196F3" />
               </TouchableOpacity>
-              
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => handleToggleUserStatus(user)}
+                onPress={() => handleDeleteUser(user)}
               >
-                <Ionicons 
-                  name={user.trangThai ? "lock-closed" : "lock-open"} 
-                  size={18} 
-                  color={user.trangThai ? "#F44336" : "#4CAF50"} 
-                />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleResetPassword(user.id || user._id || '')}
-              >
-                <Ionicons name="key" size={18} color="#FF9800" />
+                <Ionicons name="trash" size={18} color="#F44336" />
               </TouchableOpacity>
             </View>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
@@ -309,7 +296,59 @@ export default function UserManagement() {
         onClose={() => setModalVisible(false)}
         onSave={loadUsers}
       />
+
+      <TeacherClassesModal
+        visible={classesModalVisible}
+        teacher={selectedTeacher}
+        classes={teacherClasses}
+        loading={teacherClassesLoading}
+        onClose={() => setClassesModalVisible(false)}
+      />
     </View>
+  );
+}
+
+function TeacherClassesModal({ visible, teacher, classes, loading, onClose }: {
+  visible: boolean;
+  teacher: User | null;
+  classes: any[];
+  loading: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>
+            {teacher ? `Lớp của ${teacher.hoTen}` : 'Lớp của giáo viên'}
+          </Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#9C27B0" />
+              <Text style={styles.loadingText}>Đang tải danh sách lớp...</Text>
+            </View>
+          ) : classes.length === 0 ? (
+            <View style={styles.emptyClassContainer}>
+              <Text style={styles.emptyClassText}>Chưa có lớp nào</Text>
+            </View>
+          ) : (
+            classes.map((cls, idx) => (
+              <View key={cls._id || cls.id || `class-${idx}`} style={styles.userCard}>
+                <Text style={styles.classTitle}>{cls.tenLop || cls.className || 'Lớp học'}</Text>
+                {cls.moTa ? <Text style={styles.classDescription}>{cls.moTa}</Text> : null}
+                <Text style={styles.userRole}>Số học sinh: {(cls.hocSinh && cls.hocSinh.length) || 0}</Text>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -837,5 +876,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: '600',
+  },
+  emptyClassContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyClassText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  classTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  classDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
 });

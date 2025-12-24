@@ -83,11 +83,31 @@ interface LessonReport {
   attempts?: number;
 }
 
+interface GameReport {
+  id: string;
+  title: string;
+  type: string;
+  category: string;
+  level: string;
+  description?: string;
+  className?: string;
+  score: number;
+  timeSpent: number;
+  completedAt?: string | null;
+  status: string;
+  answers: LessonAnswerDetail[];
+  attempts?: number;
+  resultImage?: string | null;
+  teacherScore?: number | null;
+  gradingStatus?: string;
+}
+
 interface ClassReport {
   classId: string;
   className: string | null;
   classDescription?: string;
   lessons: LessonReport[];
+  games: GameReport[];
 }
 
 export default function Reports() {
@@ -98,7 +118,8 @@ export default function Reports() {
   const [classReports, setClassReports] = useState<ClassReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<LessonReport | null>(null);
+  const [selectedReport, setSelectedReport] = useState<LessonReport | GameReport | null>(null);
+  const [selectedReportType, setSelectedReportType] = useState<'lesson' | 'game' | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
   useEffect(() => {
@@ -158,7 +179,8 @@ export default function Reports() {
         classId: cls.classId || cls.id || cls._id,
         className: cls.classId ? (cls.className || cls.tenLop || 'Lớp học') : null,
         classDescription: cls.classDescription || cls.moTa || '',
-        lessons: (cls.lessons || []).map((lesson: any) => mapLessonReport(lesson))
+        lessons: (cls.lessons || []).map((lesson: any) => mapLessonReport(lesson)),
+        games: (cls.games || []).map((game: any) => mapGameReport(game))
       }));
 
       setClassReports(mappedClasses);
@@ -215,6 +237,53 @@ export default function Reports() {
       case 'action': return 'Hành động';
       default: return 'Chung';
     }
+  };
+
+  const getGameTypeIcon = (type: string) => {
+    switch (type) {
+      case 'toMau': return 'color-palette';
+      case 'xepHinh': return 'grid';
+      case 'ghepDoi': return 'link';
+      case 'doan': return 'help-circle';
+      default: return 'game-controller';
+    }
+  };
+
+  const getGameTypeName = (type: string) => {
+    switch (type) {
+      case 'toMau': return 'Tô màu';
+      case 'xepHinh': return 'Xếp hình';
+      case 'ghepDoi': return 'Ghép đôi';
+      case 'doan': return 'Đoán';
+      default: return 'Trò chơi';
+    }
+  };
+
+  const mapGameReport = (game: any): GameReport => {
+    return {
+      id: game.gameId || game.id || game._id,
+      title: game.title || 'Trò chơi',
+      type: game.type || 'unknown',
+      category: game.category || 'general',
+      level: game.level || 'beginner',
+      description: game.description || '',
+      className: game.className,
+      score: game.score || 0,
+      timeSpent: game.timeSpent || 0,
+      completedAt: game.completedAt || null,
+      status: game.status || 'hoanThanh',
+      answers: (game.answers || []).map((ans: any) => ({
+        questionId: ans.questionId,
+        question: ans.question || `Câu hỏi ${ans.questionId}`,
+        answer: ans.answer || '',
+        correctAnswer: ans.correctAnswer || '',
+        isCorrect: ans.isCorrect || false
+      })),
+      attempts: game.attempts || 1,
+      resultImage: game.resultImage || null,
+      teacherScore: game.teacherScore || null,
+      gradingStatus: game.gradingStatus || 'chuaCham'
+    };
   };
 
   const mapLessonReport = (lesson: any): LessonReport => {
@@ -295,8 +364,10 @@ export default function Reports() {
     };
   };
 
-  const handleViewDetail = (report: LessonReport) => {
+  const handleViewDetail = (report: LessonReport | GameReport) => {
     setSelectedReport(report);
+    // Kiểm tra xem có field 'type' (của game) hay không
+    setSelectedReportType('type' in report ? 'game' : 'lesson');
     setDetailModalVisible(true);
   };
 
@@ -389,13 +460,13 @@ export default function Reports() {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Chi tiết bài học</Text>
+          <Text style={styles.sectionTitle}>Chi tiết hoạt động</Text>
           
           {classReports.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="book" size={60} color="#ccc" />
-              <Text style={styles.emptyText}>Chưa có bài học nào</Text>
-              <Text style={styles.emptySubtext}>Trẻ chưa hoàn thành bài học nào</Text>
+              <Text style={styles.emptyText}>Chưa có hoạt động nào</Text>
+              <Text style={styles.emptySubtext}>Trẻ chưa hoàn thành hoạt động nào</Text>
             </View>
           ) : (
             classReports.map((classReport) => (
@@ -405,12 +476,13 @@ export default function Reports() {
                   <Text style={styles.classDescription}>{classReport.classDescription}</Text>
                 ) : null}
 
-                {classReport.lessons.length === 0 ? (
-                  <View style={styles.emptyClassContainer}>
-                    <Text style={styles.emptyClassText}>Chưa có bài học nào trong lớp này</Text>
-                  </View>
-                ) : (
-                  classReport.lessons.map((report) => (
+                {/* Hiển thị bài học */}
+                {classReport.lessons.length > 0 && (
+                  <View style={styles.activityTypeSection}>
+                    <Text style={styles.activityTypeTitle}>
+                      <Ionicons name="book" size={16} color="#2196F3" /> Bài học
+                    </Text>
+                    {classReport.lessons.map((report) => (
                     <TouchableOpacity 
                       key={`${classReport.classId}-${report.id}`} 
                       style={styles.reportCard}
@@ -463,7 +535,86 @@ export default function Reports() {
                         </View>
                       </View>
                     </TouchableOpacity>
-                  ))
+                  ))}
+                  </View>
+                )}
+
+                {/* Hiển thị trò chơi */}
+                {classReport.games.length > 0 && (
+                  <View style={styles.activityTypeSection}>
+                    <Text style={styles.activityTypeTitle}>
+                      <Ionicons name="game-controller" size={16} color="#FF9800" /> Trò chơi
+                    </Text>
+                    {classReport.games.map((game) => (
+                      <TouchableOpacity 
+                        key={`${classReport.classId}-game-${game.id}`} 
+                        style={styles.reportCard}
+                        onPress={() => handleViewDetail(game)}
+                      >
+                        <View style={styles.reportHeader}>
+                          <View style={styles.reportIcon}>
+                            <Ionicons 
+                              name={getGameTypeIcon(game.type) as any} 
+                              size={20} 
+                              color="#FF9800" 
+                            />
+                          </View>
+                          <View style={styles.reportInfo}>
+                            <Text style={styles.reportTitle}>{game.title}</Text>
+                            <Text style={styles.reportCategory}>
+                              {`${getGameTypeName(game.type)} • ${getCategoryName(game.category)} • ${game.level}`}
+                            </Text>
+                            {game.className ? (
+                              <Text style={styles.reportClassName}>{game.className}</Text>
+                            ) : null}
+                          </View>
+                          <View style={styles.scoreContainer}>
+                            <Text style={[
+                              styles.scoreText,
+                              { color: getScoreGrade(game.score).color }
+                            ]}>
+                              {String(game.score)}
+                            </Text>
+                            <Text style={styles.scoreLabel}>điểm</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.reportDetails}>
+                          <View style={styles.detailItem}>
+                            <Ionicons name="time" size={16} color="#666" />
+                            <Text style={styles.detailText}>{formatTime(game.timeSpent)}</Text>
+                          </View>
+                          <View style={styles.detailItem}>
+                            <Ionicons name="calendar" size={16} color="#666" />
+                            <Text style={styles.detailText}>
+                              {game.completedAt ? new Date(game.completedAt).toLocaleDateString('vi-VN') : 'Chưa hoàn thành'}
+                            </Text>
+                          </View>
+                          <View style={styles.detailItem}>
+                            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                            <Text style={[styles.detailText, { color: '#4CAF50' }]}>
+                              {getScoreGrade(game.score).grade}
+                            </Text>
+                          </View>
+                          {game.teacherScore !== null && (
+                            <View style={styles.detailItem}>
+                              <Ionicons name="school" size={16} color="#9C27B0" />
+                              <Text style={[styles.detailText, { color: '#9C27B0' }]}>
+                                GV: {game.teacherScore}đ
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Hiển thị thông báo nếu không có hoạt động nào */}
+                {classReport.lessons.length === 0 && classReport.games.length === 0 && (
+                  <View style={styles.emptyClassContainer}>
+                    <Text style={styles.emptyClassText}>Chưa có hoạt động nào trong lớp này</Text>
+                  </View>
                 )}
               </View>
             ))
@@ -472,12 +623,14 @@ export default function Reports() {
       </ScrollView>
 
       <ErrorBoundary>
-        <LessonDetailModal
+        <ActivityDetailModal
           visible={detailModalVisible}
           report={selectedReport}
+          reportType={selectedReportType}
           onClose={() => {
             setDetailModalVisible(false);
             setSelectedReport(null);
+            setSelectedReportType(null);
           }}
         />
       </ErrorBoundary>
@@ -485,12 +638,17 @@ export default function Reports() {
   );
 }
 
-function LessonDetailModal({ visible, report, onClose }: {
+function ActivityDetailModal({ visible, report, reportType, onClose }: {
   visible: boolean;
-  report: LessonReport | null;
+  report: LessonReport | GameReport | null;
+  reportType: 'lesson' | 'game' | null;
   onClose: () => void;
 }) {
   if (!report) return null;
+
+  const isGame = reportType === 'game';
+  const gameReport = isGame ? report as GameReport : null;
+  const lessonReport = !isGame ? report as LessonReport : null;
 
   const safeRenderText = (value: any, fallback: string = ''): string => {
     if (value === null || value === undefined) return fallback;
@@ -537,11 +695,33 @@ function LessonDetailModal({ visible, report, onClose }: {
     }
   };
 
+  const getGameTypeIcon = (type: string) => {
+    switch (type) {
+      case 'toMau': return 'color-palette';
+      case 'xepHinh': return 'grid';
+      case 'ghepDoi': return 'link';
+      case 'doan': return 'help-circle';
+      default: return 'game-controller';
+    }
+  };
+
+  const getGameTypeName = (type: string) => {
+    switch (type) {
+      case 'toMau': return 'Tô màu';
+      case 'xepHinh': return 'Xếp hình';
+      case 'ghepDoi': return 'Ghép đôi';
+      case 'doan': return 'Đoán';
+      default: return 'Trò chơi';
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Chi tiết bài học</Text>
+          <Text style={styles.modalTitle}>
+            {isGame ? 'Chi tiết trò chơi' : 'Chi tiết bài học'}
+          </Text>
           <TouchableOpacity onPress={onClose}>
             <Ionicons name="close" size={24} color="#666" />
           </TouchableOpacity>
@@ -552,15 +732,24 @@ function LessonDetailModal({ visible, report, onClose }: {
             <View style={styles.lessonHeader}>
               <View style={styles.lessonIcon}>
                 <Ionicons 
-                  name={getCategoryIcon(report.category) as any} 
+                  name={
+                    isGame && gameReport
+                      ? (getGameTypeIcon(gameReport.type) as any)
+                      : (getCategoryIcon(report.category) as any)
+                  } 
                   size={24} 
-                  color="#2196F3" 
+                  color={isGame ? "#FF9800" : "#2196F3"} 
                 />
               </View>
               <View style={styles.lessonInfo}>
-                <Text style={styles.lessonTitle}>{safeRenderText(report.title, 'Bài học')}</Text>
+                <Text style={styles.lessonTitle}>
+                  {safeRenderText(report.title, isGame ? 'Trò chơi' : 'Bài học')}
+                </Text>
                 <Text style={styles.lessonCategory}>
-                  {`${safeRenderText(getCategoryName(report.category), 'Chung')} • ${safeRenderText(report.level, 'beginner')}`}
+                  {isGame && gameReport
+                    ? `${safeRenderText(getGameTypeName(gameReport.type), 'Trò chơi')} • ${safeRenderText(getCategoryName(report.category), 'Chung')} • ${safeRenderText(report.level, 'beginner')}`
+                    : `${safeRenderText(getCategoryName(report.category), 'Chung')} • ${safeRenderText(report.level, 'beginner')}`
+                  }
                 </Text>
               </View>
               <View style={styles.modalScoreContainer}>
@@ -589,16 +778,32 @@ function LessonDetailModal({ visible, report, onClose }: {
                 <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
                 <Text style={[styles.modalStatText, { color: '#4CAF50' }]}>
                   {safeRenderText(getScoreGrade(report.score || 0).grade, 'Chưa đánh giá')}
-                      </Text>
+                </Text>
               </View>
+              {isGame && gameReport && gameReport.teacherScore !== null && (
+                <View style={styles.modalStatItem}>
+                  <Ionicons name="school" size={16} color="#9C27B0" />
+                  <Text style={[styles.modalStatText, { color: '#9C27B0' }]}>
+                    GV: {gameReport.teacherScore}đ
+                  </Text>
+                </View>
+              )}
               {report.attempts && report.attempts > 0 && (
                 <View style={styles.modalStatItem}>
                   <Ionicons name="refresh" size={16} color="#666" />
                   <Text style={styles.modalStatText}>{safeRenderText(`${report.attempts} lần thử`, '0 lần thử')}</Text>
                 </View>
-                    )}
-                  </View>
+              )}
+            </View>
           </View>
+
+          {/* Hiển thị hình ảnh kết quả nếu là game */}
+          {isGame && gameReport && gameReport.resultImage && (
+            <View style={styles.resultImageSection}>
+              <Text style={styles.modalSectionTitle}>Hình ảnh kết quả</Text>
+              <Text style={styles.resultImageText}>{gameReport.resultImage}</Text>
+            </View>
+          )}
 
           {report.answers && Array.isArray(report.answers) && report.answers.length > 0 && (
             <View style={styles.answersSection}>
@@ -856,6 +1061,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 12,
+  },
+  activityTypeSection: {
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  activityTypeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   emptyClassContainer: {
     paddingVertical: 12,
@@ -1196,6 +1413,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     textAlign: 'center',
+  },
+  resultImageSection: {
+    marginTop: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  resultImageText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
   answerSummary: {
     marginTop: 16,

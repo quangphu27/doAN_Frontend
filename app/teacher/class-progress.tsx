@@ -281,10 +281,28 @@ export default function ClassProgress() {
                       <Text style={styles.statLabel}>Chưa nộp</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statValue, { color: getScoreColor(game.summary.averageScore) }]}>
-                        {game.summary.averageScore}%
-                      </Text>
-                      <Text style={styles.statLabel}>Điểm TB</Text>
+                      {(() => {
+                        const isColoring = game.type === 'toMau';
+                        if (isColoring && game.summary.averageScore === 0 && game.summary.submittedCount > 0) {
+                          return (
+                            <>
+                              <Text style={[styles.statValue, { color: '#999', fontSize: 14 }]}>
+                                Chưa có điểm
+                              </Text>
+                              <Text style={styles.statLabel}>Điểm TB</Text>
+                            </>
+                          );
+                        } else {
+                          return (
+                            <>
+                              <Text style={[styles.statValue, { color: getScoreColor(game.summary.averageScore) }]}>
+                                {game.summary.averageScore}%
+                              </Text>
+                              <Text style={styles.statLabel}>Điểm TB</Text>
+                            </>
+                          );
+                        }
+                      })()}
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -323,9 +341,15 @@ export default function ClassProgress() {
                   <Text style={styles.statLabel}>Bài đã làm</Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: getScoreColor(studentProgress.averageScore) }]}>
-                    {studentProgress.averageScore}%
-                  </Text>
+                  {studentProgress.averageScore > 0 ? (
+                    <Text style={[styles.statValue, { color: getScoreColor(studentProgress.averageScore) }]}>
+                      {studentProgress.averageScore}%
+                    </Text>
+                  ) : (
+                    <Text style={[styles.statValue, { color: '#999', fontSize: 16 }]}>
+                      Chưa có điểm
+                    </Text>
+                  )}
                   <Text style={styles.statLabel}>Điểm trung bình</Text>
                 </View>
               </View>
@@ -333,19 +357,62 @@ export default function ClassProgress() {
               {studentProgress.progress.length > 0 && (
                 <View style={styles.recentProgress}>
                   <Text style={styles.recentTitle}>Bài làm gần đây:</Text>
-                  {studentProgress.progress.slice(0, 3).map((item) => (
-                    <View key={item.id} style={styles.progressItem}>
-                      <Ionicons
-                        name={item.loai === 'baiHoc' ? 'book' : 'game-controller'}
-                        size={16}
-                        color="#666"
-                      />
-                      <Text style={styles.progressText} numberOfLines={1}>
-                        {item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'N/A'}
-                      </Text>
-                      <Text style={styles.progressScore}>{item.diemSo}%</Text>
-                    </View>
-                  ))}
+                  {studentProgress.progress.slice(0, 3).map((item) => {
+                    const isColoring = item.loai === 'troChoi' && (item.troChoi?.loai === 'toMau');
+                    const teacherScore = (item as any).teacherScore ?? (item as any).diemGiaoVien;
+                    if (isColoring) {
+                      if (typeof teacherScore === 'number') {
+                        return (
+                          <View key={item.id} style={styles.progressItem}>
+                            <Ionicons
+                              name={item.loai === 'baiHoc' ? 'book' : 'game-controller'}
+                              size={16}
+                              color="#666"
+                            />
+                            <Text style={styles.progressText} numberOfLines={1}>
+                              {item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'N/A'}
+                            </Text>
+                            <Text style={[styles.progressScore, { color: getScoreColor(teacherScore) }]}>
+                              {teacherScore}%
+                            </Text>
+                          </View>
+                        );
+                      } else {
+                        return (
+                          <View key={item.id} style={styles.progressItem}>
+                            <Ionicons
+                              name={item.loai === 'baiHoc' ? 'book' : 'game-controller'}
+                              size={16}
+                              color="#666"
+                            />
+                            <Text style={styles.progressText} numberOfLines={1}>
+                              {item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'N/A'}
+                            </Text>
+                            <Text style={[styles.progressScore, { color: '#999' }]}>
+                              Chưa có điểm
+                            </Text>
+                          </View>
+                        );
+                      }
+                    } else {
+                      const displayScore = typeof teacherScore === 'number' ? teacherScore : item.diemSo;
+                      return (
+                        <View key={item.id} style={styles.progressItem}>
+                          <Ionicons
+                            name={item.loai === 'baiHoc' ? 'book' : 'game-controller'}
+                            size={16}
+                            color="#666"
+                          />
+                          <Text style={styles.progressText} numberOfLines={1}>
+                            {item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'N/A'}
+                          </Text>
+                          <Text style={[styles.progressScore, { color: getScoreColor(displayScore) }]}>
+                            {displayScore}%
+                          </Text>
+                        </View>
+                      );
+                    }
+                  })}
                 </View>
               )}
             </TouchableOpacity>

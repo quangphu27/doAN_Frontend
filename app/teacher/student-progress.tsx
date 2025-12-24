@@ -27,8 +27,10 @@ interface ProgressItem {
     tieuDe: string;
     loai: string;
     danhMuc: string;
+    capDo?: string;
     moTa?: string;
   };
+  diemGiaoVien?: number | null;
   diemSo: number;
   thoiGianDaDung: number;
   ngayHoanThanh: string;
@@ -71,7 +73,35 @@ export default function StudentProgress() {
     try {
       setLoading(true);
       const response = await api.classes.getStudentProgress(classId as string, studentId as string);
-      setData(response.data);
+      const sorted = {
+        ...response.data,
+        progress: [...(response.data?.progress || [])].sort((a: any, b: any) => {
+          const aTime = new Date(a.ngayHoanThanh || a.updatedAt || a.createdAt || 0).getTime();
+          const bTime = new Date(b.ngayHoanThanh || b.updatedAt || b.createdAt || 0).getTime();
+          return bTime - aTime;
+        })
+      };
+      const progressList = sorted.progress || [];
+      const coloringGames = progressList.filter((p: any) => 
+        p.loai === 'troChoi' && p.troChoi && p.troChoi.loai === 'toMau'
+      );
+      const otherItems = progressList.filter((p: any) => 
+        !(p.loai === 'troChoi' && p.troChoi && p.troChoi.loai === 'toMau')
+      );
+      const coloringScores = coloringGames
+        .map((p: any) => typeof p.diemGiaoVien === 'number' ? p.diemGiaoVien : null)
+        .filter((s: any) => s !== null);
+      const otherScores = otherItems.map((p: any) => 
+        typeof p.diemGiaoVien === 'number' ? p.diemGiaoVien : (p.diemSo || 0)
+      );
+      const allScores = [...coloringScores, ...otherScores];
+      const calculatedAverage = allScores.length > 0
+        ? Math.round(allScores.reduce((sum: number, s: number) => sum + s, 0) / allScores.length)
+        : 0;
+      setData({
+        ...sorted,
+        averageScore: calculatedAverage
+      });
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể tải kết quả');
     } finally {
@@ -155,9 +185,15 @@ export default function StudentProgress() {
               <Text style={styles.statLabel}>Bài đã làm</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: getScoreColor(data.averageScore) }]}>
-                {data.averageScore}%
-              </Text>
+              {data.averageScore > 0 ? (
+                <Text style={[styles.statValue, { color: getScoreColor(data.averageScore) }]}>
+                  {data.averageScore}%
+                </Text>
+              ) : (
+                <Text style={[styles.statValue, { color: '#999', fontSize: 16 }]}>
+                  Chưa có điểm
+                </Text>
+              )}
               <Text style={styles.statLabel}>Điểm trung bình</Text>
             </View>
           </View>
@@ -193,7 +229,32 @@ export default function StudentProgress() {
             </View>
           ) : (
             data.progress.map((item) => (
-              <View key={item.id} style={styles.progressCard}>
+              <TouchableOpacity
+                key={item.id}
+                style={styles.progressCard}
+                activeOpacity={0.8}
+                onPress={() => {
+                  const isLesson = item.loai === 'baiHoc';
+                  const itemId = isLesson ? item.baiHoc?._id : item.troChoi?._id;
+                  if (!itemId) return;
+                  router.push({
+                    pathname: '/teacher/result-detail',
+                    params: {
+                      type: isLesson ? 'lesson' : 'game',
+                      itemId,
+                      title: item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'Kết quả',
+                      studentId: data.student.id || studentId,
+                      studentName: data.student.hoTen,
+                      gameType: isLesson ? undefined : item.troChoi?.loai,
+                      progressId: item.id,
+                      backTo: JSON.stringify({
+                        pathname: '/teacher/student-progress',
+                        params: { classId, studentId }
+                      })
+                    }
+                  });
+                }}
+              >
                 <View style={styles.progressHeader}>
                   <View style={styles.progressType}>
                     <Ionicons
@@ -207,16 +268,46 @@ export default function StudentProgress() {
                       </Text>
                       <Text style={styles.progressMeta}>
                         {item.loai === 'baiHoc' ? 'Bài học' : 'Trò chơi'}
-                        {item.baiHoc?.danhMuc && ` • ${item.baiHoc.danhMuc}`}
-                        {item.baiHoc?.capDo && ` • ${item.baiHoc.capDo}`}
+                        {(item.baiHoc?.danhMuc || item.troChoi?.danhMuc) && ` • ${(item.baiHoc?.danhMuc || item.troChoi?.danhMuc)}`}
+                        {(item.baiHoc?.capDo || item.troChoi?.capDo) && ` • ${(item.baiHoc?.capDo || item.troChoi?.capDo)}`}
+                        {item.troChoi?.loai && ` • ${item.troChoi.loai}`}
                       </Text>
                     </View>
                   </View>
-                  <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(item.diemSo) + '20' }]}>
-                    <Text style={[styles.scoreText, { color: getScoreColor(item.diemSo) }]}>
-                      {item.diemSo}%
-                    </Text>
-                  </View>
+                  {(() => {
+                    const isColoring = item.loai === 'troChoi' && (item.troChoi?.loai === 'toMau');
+                    const teacherScore = typeof item.diemGiaoVien === 'number' ? item.diemGiaoVien : null;
+                    if (isColoring) {
+                      if (teacherScore !== null) {
+                        const scoreColor = getScoreColor(teacherScore);
+                        return (
+                          <View style={[styles.scoreBadge, { backgroundColor: scoreColor + '20' }]}>
+                            <Text style={[styles.scoreText, { color: scoreColor }]}>
+                              {teacherScore}%
+                            </Text>
+                          </View>
+                        );
+                      } else {
+                        return (
+                          <View style={[styles.scoreBadge, { backgroundColor: '#999' + '20' }]}>
+                            <Text style={[styles.scoreText, { color: '#999', fontSize: 12 }]}>
+                              Chưa có điểm
+                            </Text>
+                          </View>
+                        );
+                      }
+                    } else {
+                      const scoreValue = teacherScore !== null ? teacherScore : item.diemSo;
+                      const scoreColor = getScoreColor(scoreValue || 0);
+                      return (
+                        <View style={[styles.scoreBadge, { backgroundColor: scoreColor + '20' }]}>
+                          <Text style={[styles.scoreText, { color: scoreColor }]}>
+                            {scoreValue ?? 0}%
+                          </Text>
+                        </View>
+                      );
+                    }
+                  })()}
                 </View>
 
                 <View style={styles.progressDetails}>
@@ -237,7 +328,7 @@ export default function StudentProgress() {
                     </View>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>

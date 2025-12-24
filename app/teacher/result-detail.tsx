@@ -270,8 +270,10 @@ export default function ResultDetail() {
 		);
 	}
 
-	const systemScore = 0;
 	const teacherScoreValue = typeof result.teacherScore === 'number' ? result.teacherScore : null;
+	const displayScore = isColoringGame 
+		? (teacherScoreValue !== null ? teacherScoreValue : null)
+		: (teacherScoreValue !== null ? teacherScoreValue : (result.score ?? 0));
 	const resultImageUri = buildImage(
 		result.resultImage ||
 		(result as any).resultImagePath ||
@@ -312,19 +314,15 @@ export default function ResultDetail() {
 					<Text style={styles.infoSub}>{result.className}</Text>
 					<View style={styles.infoRow}>
 						<Text style={styles.infoItem}>
-							Điểm hệ thống:{' '}
-							<Text style={[styles.bold, { color: '#4CAF50' }]}>{systemScore}</Text>
+							Điểm:{' '}
+							{isColoringGame && displayScore === null ? (
+								<Text style={[styles.bold, { color: '#999' }]}>Chưa có điểm</Text>
+							) : (
+								<Text style={[styles.bold, { color: '#4CAF50' }]}>{displayScore}</Text>
+							)}
 						</Text>
 						<Text style={styles.infoItem}>Thời gian: {formatTime(result.timeSpent || 0)}</Text>
 					</View>
-					{teacherScoreValue !== null && (
-						<View style={styles.infoRow}>
-							<Text style={styles.infoItem}>
-								Điểm giáo viên:{' '}
-								<Text style={[styles.bold, { color: '#FF9800' }]}>{teacherScoreValue}</Text>
-							</Text>
-							</View>
-					)}
 					{isColoringGame && resultImageUri && (
 						<Image
 							source={{ uri: resultImageUri }}

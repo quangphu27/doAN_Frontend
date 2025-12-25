@@ -189,7 +189,7 @@ export default function StudentProgress() {
             <View style={styles.statCard}>
               {data.averageScore > 0 ? (
                 <Text style={[styles.statValue, { color: getScoreColor(data.averageScore) }]}>
-                  {data.averageScore}%
+                  {data.averageScore}
                 </Text>
               ) : (
                 <Text style={[styles.statValue, { color: '#999', fontSize: 16 }]}>
@@ -285,7 +285,7 @@ export default function StudentProgress() {
                         return (
                           <View style={[styles.scoreBadge, { backgroundColor: scoreColor + '20' }]}>
                             <Text style={[styles.scoreText, { color: scoreColor }]}>
-                              {teacherScore}%
+                              {teacherScore}
                             </Text>
                           </View>
                         );
@@ -304,7 +304,7 @@ export default function StudentProgress() {
                       return (
                         <View style={[styles.scoreBadge, { backgroundColor: scoreColor + '20' }]}>
                           <Text style={[styles.scoreText, { color: scoreColor }]}>
-                            {scoreValue ?? 0}%
+                            {scoreValue ?? 0}
                           </Text>
                         </View>
                       );

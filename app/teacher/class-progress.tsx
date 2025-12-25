@@ -241,7 +241,7 @@ export default function ClassProgress() {
                     </View>
                     <View style={styles.statItem}>
                       <Text style={[styles.statValue, { color: getScoreColor(lesson.summary.averageScore) }]}>
-                        {lesson.summary.averageScore}%
+                        {lesson.summary.averageScore}
                       </Text>
                       <Text style={styles.statLabel}>Điểm TB</Text>
                     </View>
@@ -298,7 +298,7 @@ export default function ClassProgress() {
                           return (
                             <>
                               <Text style={[styles.statValue, { color: getScoreColor(game.summary.averageScore) }]}>
-                                {game.summary.averageScore}%
+                                {game.summary.averageScore}
                               </Text>
                               <Text style={styles.statLabel}>Điểm TB</Text>
                             </>
@@ -345,7 +345,7 @@ export default function ClassProgress() {
                 <View style={styles.statItem}>
                   {studentProgress.averageScore > 0 ? (
                     <Text style={[styles.statValue, { color: getScoreColor(studentProgress.averageScore) }]}>
-                      {studentProgress.averageScore}%
+                      {studentProgress.averageScore}
                     </Text>
                   ) : (
                     <Text style={[styles.statValue, { color: '#999', fontSize: 16 }]}>
@@ -375,7 +375,7 @@ export default function ClassProgress() {
                               {item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'N/A'}
                             </Text>
                             <Text style={[styles.progressScore, { color: getScoreColor(teacherScore) }]}>
-                              {teacherScore}%
+                              {teacherScore}
                             </Text>
                           </View>
                         );
@@ -409,7 +409,7 @@ export default function ClassProgress() {
                             {item.baiHoc?.tieuDe || item.troChoi?.tieuDe || 'N/A'}
                           </Text>
                           <Text style={[styles.progressScore, { color: getScoreColor(displayScore) }]}>
-                            {displayScore}%
+                            {displayScore}
                           </Text>
                         </View>
                       );

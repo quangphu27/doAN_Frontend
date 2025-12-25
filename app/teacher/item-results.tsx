@@ -231,7 +231,7 @@ export default function ItemResults() {
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: getScoreColor(summary.averageScore) }]}>
-              {summary.averageScore}%
+              {summary.averageScore}
             </Text>
             <Text style={styles.summaryLabel}>Điểm TB</Text>
           </View>
@@ -266,7 +266,7 @@ export default function ItemResults() {
                     if (typeof s.teacherScore === 'number') {
                       return (
                         <Text style={[styles.score, { color: getScoreColor(s.teacherScore) }]}>
-                          {s.teacherScore}%
+                          {s.teacherScore}
                         </Text>
                       );
                     } else {
@@ -280,7 +280,7 @@ export default function ItemResults() {
                     const scoreValue = typeof s.teacherScore === 'number' ? s.teacherScore : s.score;
                     return (
                       <Text style={[styles.score, { color: getScoreColor(scoreValue) }]}>
-                        {scoreValue}%
+                        {scoreValue}
                       </Text>
                     );
                   }
